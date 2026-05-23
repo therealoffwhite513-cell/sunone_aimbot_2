@@ -395,7 +395,7 @@ void draw_mouse()
 
     if (OverlayUI::BeginSection("Input Method", "mouse_section_input_method"))
     {
-        std::vector<std::string> input_methods = { "WIN32", "GHUB", "ARDUINO", "KMBOX_NET", "KMBOX_A", "MAKCU" };
+        std::vector<std::string> input_methods = { "WIN32", "GHUB", "ARDUINO", "RP2350", "KMBOX_NET", "KMBOX_A", "MAKCU" };
 
         std::vector<const char*> method_items;
         method_items.reserve(input_methods.size());
@@ -512,6 +512,92 @@ void draw_mouse()
                 input_method_changed.store(true);
             }
         }
+        else if (config.input_method == "RP2350")
+        {
+            if (rp2350Serial)
+            {
+                if (rp2350Serial->isOpen())
+                {
+                    ImGui::TextColored(ImVec4(0, 255, 0, 255), "RP2350 connected");
+                }
+                else
+                {
+                    ImGui::TextColored(ImVec4(255, 0, 0, 255), "RP2350 not connected");
+                }
+            }
+
+            std::vector<std::string> port_list;
+            for (int i = 1; i <= 30; ++i)
+            {
+                port_list.push_back("COM" + std::to_string(i));
+            }
+
+            std::vector<const char*> port_items;
+            port_items.reserve(port_list.size());
+            for (const auto& port : port_list)
+            {
+                port_items.push_back(port.c_str());
+            }
+
+            int port_index = 0;
+            for (size_t i = 0; i < port_list.size(); ++i)
+            {
+                if (port_list[i] == config.rp2350_port)
+                {
+                    port_index = static_cast<int>(i);
+                    break;
+                }
+            }
+
+            if (ImGui::Combo("RP2350 Port", &port_index, port_items.data(), static_cast<int>(port_items.size())))
+            {
+                config.rp2350_port = port_list[port_index];
+                OverlayConfig_MarkDirty();
+                input_method_changed.store(true);
+            }
+
+            std::vector<int> baud_rate_list = { 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600 };
+            std::vector<std::string> baud_rate_str_list;
+            for (const auto& rate : baud_rate_list)
+            {
+                baud_rate_str_list.push_back(std::to_string(rate));
+            }
+
+            std::vector<const char*> baud_rate_items;
+            baud_rate_items.reserve(baud_rate_str_list.size());
+            for (const auto& rate_str : baud_rate_str_list)
+            {
+                baud_rate_items.push_back(rate_str.c_str());
+            }
+
+            int baud_rate_index = 0;
+            for (size_t i = 0; i < baud_rate_list.size(); ++i)
+            {
+                if (baud_rate_list[i] == config.rp2350_baudrate)
+                {
+                    baud_rate_index = static_cast<int>(i);
+                    break;
+                }
+            }
+
+            if (ImGui::Combo("RP2350 Baudrate", &baud_rate_index, baud_rate_items.data(), static_cast<int>(baud_rate_items.size())))
+            {
+                config.rp2350_baudrate = baud_rate_list[baud_rate_index];
+                OverlayConfig_MarkDirty();
+                input_method_changed.store(true);
+            }
+
+            if (ImGui::Checkbox("RP2350 16-bit Mouse", &config.rp2350_16_bit_mouse))
+            {
+                OverlayConfig_MarkDirty();
+                input_method_changed.store(true);
+            }
+            if (ImGui::Checkbox("RP2350 Enable Keys", &config.rp2350_enable_keys))
+            {
+                OverlayConfig_MarkDirty();
+                input_method_changed.store(true);
+            }
+        }
         else if (config.input_method == "GHUB")
         {
             if (ghub_version == "13.1.4")
@@ -532,7 +618,7 @@ void draw_mouse()
         }
         else if (config.input_method == "WIN32")
         {
-            ImGui::TextColored(ImVec4(255, 255, 255, 255), "This is a standard mouse input method, it may not work in most games. Use GHUB or ARDUINO.");
+            ImGui::TextColored(ImVec4(255, 255, 255, 255), "This is a standard mouse input method, it may not work in most games. Use GHUB, ARDUINO, or RP2350.");
             ImGui::TextColored(ImVec4(255, 0, 0, 255), "Use at your own risk, the method is detected in some games.");
         }
         else if (config.input_method == "KMBOX_NET")

@@ -15,6 +15,7 @@
 #include "mouse.h"
 #include "capture.h"
 #include "Arduino.h"
+#include "RP2350.h"
 #include "sunone_aimbot_2.h"
 #include "ghub.h"
 
@@ -44,6 +45,7 @@ MouseThread::MouseThread(
     bool auto_shoot,
     float bScope_multiplier,
     Arduino* arduinoConnection,
+    RP2350* rp2350Connection,
     GhubMouse* gHubMouse,
     KmboxAConnection* Kmbox_A_Connection,
     KmboxNetConnection* Kmbox_Net_Connection,
@@ -61,6 +63,7 @@ MouseThread::MouseThread(
     auto_shoot(auto_shoot),
     bScope_multiplier(bScope_multiplier),
     arduino(arduinoConnection),
+    rp2350(rp2350Connection),
     kmbox_a(Kmbox_A_Connection),
     kmbox_net(Kmbox_Net_Connection),
     makcu(makcuConnection),
@@ -456,6 +459,10 @@ void MouseThread::sendMovementToDriver(int dx, int dy)
     {
         makcu->move(dx, dy);
     }
+    else if (rp2350)
+    {
+        rp2350->move(dx, dy);
+    }
     else if (arduino)
     {
         arduino->move(dx, dy);
@@ -594,6 +601,10 @@ void MouseThread::pressMouse(const AimbotTarget& target)
         {
             makcu->press(0);
         }
+        else if (rp2350)
+        {
+            rp2350->press();
+        }
         else if (arduino)
         {
             arduino->press();
@@ -624,6 +635,10 @@ void MouseThread::pressMouse(const AimbotTarget& target)
         else if (makcu)
         {
             makcu->release(0);
+        }
+        else if (rp2350)
+        {
+            rp2350->release();
         }
         else if (arduino)
         {
@@ -661,6 +676,10 @@ void MouseThread::releaseMouse()
         else if (makcu)
         {
             makcu->release(0);
+        }
+        else if (rp2350)
+        {
+            rp2350->release();
         }
         else if (arduino)
         {
@@ -801,6 +820,12 @@ void MouseThread::setArduinoConnection(Arduino* newArduino)
 {
     std::lock_guard<std::mutex> lock(input_method_mutex);
     arduino = newArduino;
+}
+
+void MouseThread::setRP2350Connection(RP2350* newRP2350)
+{
+    std::lock_guard<std::mutex> lock(input_method_mutex);
+    rp2350 = newRP2350;
 }
 
 void MouseThread::setKmboxAConnection(KmboxAConnection* newKmbox_a)

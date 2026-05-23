@@ -140,7 +140,7 @@ Defaults below are first-run defaults from `config.cpp`.
 | `snapBoostFactor` | float | `1.15` | UI range `0.01..4.0` |
 | `easynorecoil` | bool | `false` | Recoil compensation master switch |
 | `easynorecoilstrength` | float | `0.0` | UI range `0.1..500.0` when enabled |
-| `input_method` | string | `WIN32` | `WIN32`, `GHUB`, `ARDUINO`, `KMBOX_NET`, `KMBOX_A`, `MAKCU` |
+| `input_method` | string | `WIN32` | `WIN32`, `GHUB`, `ARDUINO`, `RP2350`, `KMBOX_NET`, `KMBOX_A`, `MAKCU` |
 
 ### 4.4 Wind Mouse
 
@@ -161,7 +161,16 @@ Defaults below are first-run defaults from `config.cpp`.
 | `arduino_16_bit_mouse` | bool | `false` | Device-specific mode |
 | `arduino_enable_keys` | bool | `false` | Device-specific mode |
 
-### 4.6 KMBOX_NET
+### 4.6 RP2350
+
+| Key | Type | Default | Allowed / Notes |
+|---|---|---:|---|
+| `rp2350_baudrate` | int | `115200` | UI presets: `9600`, `19200`, `38400`, `57600`, `115200`, `230400`, `460800`, `921600` |
+| `rp2350_port` | string | `COM0` | UI COM list `COM1..COM30` |
+| `rp2350_16_bit_mouse` | bool | `true` | Send movement as one `mX,Y` command instead of 8-bit chunks |
+| `rp2350_enable_keys` | bool | `false` | Read device button events from serial lines `BD:<id>` / `BU:<id>` |
+
+### 4.7 KMBOX_NET
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
@@ -169,27 +178,27 @@ Defaults below are first-run defaults from `config.cpp`.
 | `kmbox_net_port` | string | `1984` | Device port as string |
 | `kmbox_net_uuid` | string | `DEADC0DE` | Device UUID |
 
-### 4.7 KMBOX_A
+### 4.8 KMBOX_A
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
 | `kmbox_a_pidvid` | string | empty | Format `PPPPVVVV` in one field |
 
-### 4.8 MAKCU
+### 4.9 MAKCU
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
 | `makcu_baudrate` | int | `115200` | UI presets: `9600`, `19200`, `38400`, `57600`, `115200` |
 | `makcu_port` | string | `COM0` | UI COM list `COM1..COM30` |
 
-### 4.9 Mouse Shooting
+### 4.10 Mouse Shooting
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
 | `auto_shoot` | bool | `false` | Auto fire logic |
 | `bScope_multiplier` | float | `1.0` | UI range `0.5..2.0` |
 
-### 4.10 AI
+### 4.11 AI
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
@@ -202,7 +211,7 @@ Defaults below are first-run defaults from `config.cpp`.
 | `export_enable_fp8` | bool | `false` | CUDA-only export option |
 | `export_enable_fp16` | bool | `true` | CUDA-only export option |
 
-### 4.11 CUDA (CUDA build only)
+### 4.12 CUDA (CUDA build only)
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
@@ -212,14 +221,14 @@ Defaults below are first-run defaults from `config.cpp`.
 | `enableGpuExclusiveMode` | bool | `true` | Exclusive behavior toggle |
 | `capture_use_cuda` | bool | `true` | Direct GPU capture path for TRT + duplication API |
 
-### 4.12 System
+### 4.13 System
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
 | `cpuCoreReserveCount` | int | `4` | Reserved CPU cores |
 | `systemMemoryReserveMB` | int | `2048` | Reserved RAM amount |
 
-### 4.13 Buttons
+### 4.14 Buttons
 
 All button keys are comma-separated lists of key names.
 
@@ -234,7 +243,7 @@ All button keys are comma-separated lists of key names.
 | `button_open_overlay` | list | `Home` |
 | `enable_arrows_settings` | bool | `false` |
 
-### 4.14 Overlay
+### 4.15 Overlay
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
@@ -242,7 +251,7 @@ All button keys are comma-separated lists of key names.
 | `overlay_ui_scale` | float | `1.0` | UI range `0.85..1.35` |
 | `overlay_exclude_from_capture` | bool | `true` | Hide overlay from capture/recording |
 
-### 4.15 Depth
+### 4.16 Depth
 
 Depth features require CUDA build.
 
@@ -259,7 +268,7 @@ Depth features require CUDA build.
 | `depth_mask_invert` | bool | `false` | Invert mask side |
 | `depth_debug_overlay_enabled` | bool | `false` | Extra debug rendering |
 
-### 4.16 Game Overlay
+### 4.17 Game Overlay
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
@@ -291,7 +300,7 @@ Depth features require CUDA build.
 | `game_overlay_icon_anchor` | string | `center` | `center`, `top`, `bottom`, `head` |
 | `game_overlay_icon_class` | int | `-1` | `-1` for all classes |
 
-### 4.17 Aim Simulation Overlay
+### 4.18 Aim Simulation Overlay
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
@@ -315,14 +324,14 @@ Depth features require CUDA build.
 | `aim_sim_show_history` | bool | `true` | Show trajectory history |
 | `aim_sim_show_kalman_debug` | bool | `true` | Draw Kalman estimate/innovation/velocity debug |
 
-### 4.18 Classes
+### 4.19 Classes
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
 | `class_player` | int | `0` | Must match your model class index |
 | `class_head` | int | `1` | Must match your model class index |
 
-### 4.19 Debug
+### 4.20 Debug
 
 | Key | Type | Default | Allowed / Notes |
 |---|---|---:|---|
@@ -332,7 +341,7 @@ Depth features require CUDA build.
 | `screenshot_delay` | int | `500` | Minimum interval (ms) between screenshots |
 | `verbose` | bool | `false` | Verbose console logging |
 
-### 4.20 Active Game Profile
+### 4.21 Active Game Profile
 
 | Key | Type | Default | Notes |
 |---|---|---:|---|

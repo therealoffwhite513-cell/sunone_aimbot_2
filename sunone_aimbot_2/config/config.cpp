@@ -116,6 +116,12 @@ bool Config::loadConfig(const std::string& filename)
         arduino_16_bit_mouse = false;
         arduino_enable_keys = false;
 
+        // RP2350
+        rp2350_baudrate = 115200;
+        rp2350_port = "COM0";
+        rp2350_16_bit_mouse = true;
+        rp2350_enable_keys = false;
+
         // kmbox_net
         kmbox_net_ip = "10.42.42.42";
         kmbox_net_port = "1984";
@@ -435,6 +441,12 @@ bool Config::loadConfig(const std::string& filename)
     arduino_16_bit_mouse = get_bool("arduino_16_bit_mouse", false);
     arduino_enable_keys = get_bool("arduino_enable_keys", false);
 
+    // RP2350
+    rp2350_baudrate = get_long("rp2350_baudrate", 115200);
+    rp2350_port = get_string("rp2350_port", "COM0");
+    rp2350_16_bit_mouse = get_bool("rp2350_16_bit_mouse", true);
+    rp2350_enable_keys = get_bool("rp2350_enable_keys", false);
+
     // kmbox_net
     kmbox_net_ip = get_string("kmbox_net_ip", "10.42.42.42");
     kmbox_net_port = get_string("kmbox_net_port", "1984");
@@ -732,7 +744,7 @@ bool Config::saveConfig(const std::string& filename)
         << std::fixed << std::setprecision(1)
         << "easynorecoilstrength = " << easynorecoilstrength << "\n"
 
-        << "# WIN32, GHUB, ARDUINO, KMBOX_NET, KMBOX_A, MAKCU\n"
+        << "# WIN32, GHUB, ARDUINO, RP2350, KMBOX_NET, KMBOX_A, MAKCU\n"
         << "input_method = " << input_method << "\n\n";
 
     // Wind mouse
@@ -749,6 +761,13 @@ bool Config::saveConfig(const std::string& filename)
         << "arduino_port = " << arduino_port << "\n"
         << "arduino_16_bit_mouse = " << (arduino_16_bit_mouse ? "true" : "false") << "\n"
         << "arduino_enable_keys = " << (arduino_enable_keys ? "true" : "false") << "\n\n";
+
+    // RP2350
+    file << "# RP2350\n"
+        << "rp2350_baudrate = " << rp2350_baudrate << "\n"
+        << "rp2350_port = " << rp2350_port << "\n"
+        << "rp2350_16_bit_mouse = " << (rp2350_16_bit_mouse ? "true" : "false") << "\n"
+        << "rp2350_enable_keys = " << (rp2350_enable_keys ? "true" : "false") << "\n\n";
 
     // kmbox_net
     file << "# Kmbox_net\n"

@@ -27,6 +27,10 @@ void handleEasyNoRecoil(MouseThread& mouseThread)
         {
             arduinoSerial->move(0, recoil_compensation);
         }
+        else if (rp2350Serial)
+        {
+            rp2350Serial->move(0, recoil_compensation);
+        }
         else if (gHub)
         {
             gHub->mouse_xy(0, recoil_compensation);

@@ -19,6 +19,7 @@
 
 #include "AimbotTarget.h"
 #include "Arduino.h"
+#include "RP2350.h"
 #include "KmboxAConnection.h"
 #include "KmboxNetConnection.h"
 #include "Makcu.h"
@@ -49,6 +50,7 @@ private:
     std::atomic<bool> mouse_pressed{ false };
 
     Arduino* arduino;
+    RP2350* rp2350;
     KmboxAConnection* kmbox_a;
     KmboxNetConnection* kmbox_net;
     MakcuConnection* makcu;
@@ -128,6 +130,7 @@ public:
         bool auto_shoot,
         float bScope_multiplier,
         Arduino* arduinoConnection = nullptr,
+        RP2350* rp2350Connection = nullptr,
         GhubMouse* gHubMouse = nullptr,
         KmboxAConnection* Kmbox_A_Connection = nullptr,
         KmboxNetConnection* Kmbox_Net_Connection = nullptr,
@@ -165,6 +168,7 @@ public:
     std::vector<std::pair<double, double>> getWindDebugTrail();
 
     void setArduinoConnection(Arduino* newArduino);
+    void setRP2350Connection(RP2350* newRP2350);
     void setKmboxAConnection(KmboxAConnection* newKmbox_a);
     void setKmboxNetConnection(KmboxNetConnection* newKmbox_net);
     void setMakcuConnection(MakcuConnection* newMakcu);

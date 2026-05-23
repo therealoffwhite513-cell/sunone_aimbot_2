@@ -669,11 +669,6 @@ std::vector<std::string> getAvailableModels()
     }
     else
     {
-        for (const auto& file : engineFiles)
-        {
-            availableModels.push_back(file);
-        }
-
         for (const auto& file : onnxFiles)
         {
             availableModels.push_back(file);

@@ -54,6 +54,7 @@ Config config;
 
 GhubMouse* gHub = nullptr;
 Arduino* arduinoSerial = nullptr;
+RP2350* rp2350Serial = nullptr;
 KmboxNetConnection* kmboxNetSerial = nullptr;
 KmboxAConnection* kmboxASerial = nullptr;
 MakcuConnection* makcuSerial = nullptr;
@@ -80,6 +81,41 @@ static int FatalExit(const std::string& message)
     std::cout << "Press Enter to exit...";
     std::cin.get();
     return -1;
+}
+
+static bool SelectCompatibleAiModel()
+{
+    std::vector<std::string> availableModels = getAvailableModels();
+    if (!config.ai_model.empty())
+    {
+        const std::string modelPath = "models/" + config.ai_model;
+        if (!std::filesystem::exists(modelPath))
+        {
+            std::cerr << "[MAIN] Specified model does not exist: " << modelPath << std::endl;
+        }
+        else if (std::find(availableModels.begin(), availableModels.end(), config.ai_model) != availableModels.end())
+        {
+            return true;
+        }
+        else
+        {
+            std::cerr << "[MAIN] Specified model is not compatible with backend "
+                      << config.backend << ": " << config.ai_model << std::endl;
+        }
+    }
+
+    if (availableModels.empty())
+    {
+        std::cerr << "[MAIN] No compatible AI models found in 'models' directory for backend "
+                  << config.backend << "." << std::endl;
+        return false;
+    }
+
+    config.ai_model = availableModels[0];
+    config.saveConfig("config.ini");
+    std::cout << "[MAIN] Loaded first compatible " << config.backend
+              << " model: " << config.ai_model << std::endl;
+    return true;
 }
 
 static void HandleThreadCrash(const char* name, const std::exception* ex)
@@ -125,6 +161,12 @@ void createInputDevices()
         gHub = nullptr;
     }
 
+    if (rp2350Serial)
+    {
+        delete rp2350Serial;
+        rp2350Serial = nullptr;
+    }
+
     if (kmboxNetSerial)
     {
         delete kmboxNetSerial;
@@ -147,6 +189,17 @@ void createInputDevices()
     {
         std::cout << "[Mouse] Using Arduino method input." << std::endl;
         arduinoSerial = new Arduino(config.arduino_port, config.arduino_baudrate);
+    }
+    else if (config.input_method == "RP2350")
+    {
+        std::cout << "[Mouse] Using RP2350 method input." << std::endl;
+        rp2350Serial = new RP2350(config.rp2350_port, config.rp2350_baudrate);
+        if (!rp2350Serial->isOpen())
+        {
+            std::cerr << "[RP2350] Error connecting." << std::endl;
+            delete rp2350Serial;
+            rp2350Serial = nullptr;
+        }
     }
     else if (config.input_method == "GHUB")
     {
@@ -207,6 +260,7 @@ void assignInputDevices()
     if (globalMouseThread)
     {
         globalMouseThread->setArduinoConnection(arduinoSerial);
+        globalMouseThread->setRP2350Connection(rp2350Serial);
         globalMouseThread->setGHubMouse(gHub);
         globalMouseThread->setKmboxAConnection(kmboxASerial);
         globalMouseThread->setKmboxNetConnection(kmboxNetSerial);
@@ -352,26 +406,10 @@ int main()
             }
         }
 
-        std::string modelPath = "models/" + config.ai_model;
-
-        if (!std::filesystem::exists(modelPath))
+        if (!SelectCompatibleAiModel())
         {
-            std::cerr << "[MAIN] Specified model does not exist: " << modelPath << std::endl;
-
-            std::vector<std::string> modelFiles = getModelFiles();
-
-            if (!modelFiles.empty())
-            {
-                config.ai_model = modelFiles[0];
-                config.saveConfig();
-                std::cout << "[MAIN] Loaded first available model: " << config.ai_model << std::endl;
-            }
-            else
-            {
-                std::cerr << "[MAIN] No models found in 'models' directory." << std::endl;
-                std::cin.get();
-                return -1;
-            }
+            std::cin.get();
+            return -1;
         }
 
         createInputDevices();
@@ -386,6 +424,7 @@ int main()
             config.auto_shoot,
             config.bScope_multiplier,
             arduinoSerial,
+            rp2350Serial,
             gHub,
             kmboxASerial,
             kmboxNetSerial,
@@ -394,45 +433,6 @@ int main()
 
         globalMouseThread = &mouseThread;
         assignInputDevices();
-
-        std::vector<std::string> availableModels = getAvailableModels();
-
-        if (!config.ai_model.empty())
-        {
-            std::string modelPath = "models/" + config.ai_model;
-            if (!std::filesystem::exists(modelPath))
-            {
-                std::cerr << "[MAIN] Specified model does not exist: " << modelPath << std::endl;
-
-                if (!availableModels.empty())
-                {
-                    config.ai_model = availableModels[0];
-                    config.saveConfig("config.ini");
-                    std::cout << "[MAIN] Loaded first available model: " << config.ai_model << std::endl;
-                }
-                else
-                {
-                    std::cerr << "[MAIN] No models found in 'models' directory." << std::endl;
-                    std::cin.get();
-                    return -1;
-                }
-            }
-        }
-        else
-        {
-            if (!availableModels.empty())
-            {
-                config.ai_model = availableModels[0];
-                config.saveConfig();
-                std::cout << "[MAIN] No AI model specified in config. Loaded first available model: " << config.ai_model << std::endl;
-            }
-            else
-            {
-                std::cerr << "[MAIN] No AI models found in 'models' directory." << std::endl;
-                std::cin.get();
-                return -1;
-            }
-        }
 
         std::thread dml_detThread;
 
@@ -497,6 +497,12 @@ int main()
         if (arduinoSerial)
         {
             delete arduinoSerial;
+        }
+
+        if (rp2350Serial)
+        {
+            delete rp2350Serial;
+            rp2350Serial = nullptr;
         }
 
         if (gHub)

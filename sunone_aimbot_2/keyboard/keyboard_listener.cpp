@@ -10,6 +10,7 @@
 
 #include "config.h"
 #include "Arduino.h"
+#include "RP2350.h"
 #include "keyboard_listener.h"
 #include "mouse.h"
 #include "keycodes.h"
@@ -55,6 +56,9 @@ bool isAnyKeyPressed(const std::vector<std::string>& keys)
     else if (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen()) {
         usePhysicalDevice = true;
     }
+    else if (config.rp2350_enable_keys && rp2350Serial && rp2350Serial->isOpen()) {
+        usePhysicalDevice = true;
+    }
 
     for (const auto& key_name : keys)
     {
@@ -93,6 +97,14 @@ bool isAnyKeyPressed(const std::vector<std::string>& keys)
             if (key_name == "LeftMouseButton")       pressed = arduinoSerial->shooting_active;
             else if (key_name == "RightMouseButton")  pressed = arduinoSerial->zooming_active;
             else if (key_name == "X2MouseButton")     pressed = arduinoSerial->aiming_active;
+        }
+
+        // RP2350
+        if (!pressed && config.rp2350_enable_keys && rp2350Serial && rp2350Serial->isOpen())
+        {
+            if (key_name == "LeftMouseButton")       pressed = rp2350Serial->shooting_active;
+            else if (key_name == "RightMouseButton")  pressed = rp2350Serial->zooming_active;
+            else if (key_name == "X2MouseButton")     pressed = rp2350Serial->aiming_active;
         }
 
         // Win32 API
@@ -135,6 +147,7 @@ void keyboardListener()
         {
             aiming = isAnyKeyPressed(config.button_targeting) ||
                 (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen() && arduinoSerial->aiming_active) ||
+                (config.rp2350_enable_keys && rp2350Serial && rp2350Serial->isOpen() && rp2350Serial->aiming_active) ||
                 (kmboxNetSerial && kmboxNetSerial->isOpen() && kmboxNetSerial->aiming_active) ||
                 (makcuSerial && makcuSerial->isOpen() && makcuSerial->aiming_active);
         }
@@ -146,12 +159,14 @@ void keyboardListener()
         // Shooting
         shooting = isAnyKeyPressed(config.button_shoot) ||
             (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen() && arduinoSerial->shooting_active) ||
+            (config.rp2350_enable_keys && rp2350Serial && rp2350Serial->isOpen() && rp2350Serial->shooting_active) ||
             (kmboxNetSerial && kmboxNetSerial->isOpen() && kmboxNetSerial->shooting_active) ||
             (makcuSerial && makcuSerial->isOpen() && makcuSerial->shooting_active);
 
         // Zooming
         zooming = isAnyKeyPressed(config.button_zoom) ||
             (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen() && arduinoSerial->zooming_active) ||
+            (config.rp2350_enable_keys && rp2350Serial && rp2350Serial->isOpen() && rp2350Serial->zooming_active) ||
             (kmboxNetSerial && kmboxNetSerial->isOpen() && kmboxNetSerial->zooming_active) ||
             (makcuSerial && makcuSerial->isOpen() && makcuSerial->zooming_active);
 

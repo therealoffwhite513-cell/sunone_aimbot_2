@@ -139,6 +139,12 @@ void draw_ai()
             if (config.backend != newBackend)
             {
                 config.backend = newBackend;
+                std::vector<std::string> compatibleModels = getAvailableModels();
+                if (!compatibleModels.empty() &&
+                    std::find(compatibleModels.begin(), compatibleModels.end(), config.ai_model) == compatibleModels.end())
+                {
+                    config.ai_model = compatibleModels[0];
+                }
                 OverlayConfig_MarkDirty();
                 detector_model_changed.store(true);
             }

@@ -8,6 +8,7 @@
 #include "dml_detector.h"
 #include "mouse.h"
 #include "Arduino.h"
+#include "RP2350.h"
 #include "detection_buffer.h"
 #include "KmboxNetConnection.h"
 #include "KmboxAConnection.h"
@@ -22,6 +23,7 @@ extern DirectMLDetector* dml_detector;
 extern DetectionBuffer detectionBuffer;
 extern MouseThread* globalMouseThread;
 extern Arduino* arduinoSerial;
+extern RP2350* rp2350Serial;
 extern KmboxNetConnection* kmboxNetSerial;
 extern KmboxAConnection* kmboxASerial;
 extern MakcuConnection* makcuSerial;

@@ -162,6 +162,7 @@ set(AIMBOT_SOURCES
     "${SRC_DIR}/mouse/Makcu.cpp"
     "${SRC_DIR}/mouse/mouse.cpp"
     "${SRC_DIR}/mouse/Arduino.cpp"
+    "${SRC_DIR}/mouse/RP2350.cpp"
     "${SRC_DIR}/mouse/AimbotTarget.cpp"
     "${SRC_DIR}/overlay/draw_ai.cpp"
     "${SRC_DIR}/overlay/draw_buttons.cpp"
