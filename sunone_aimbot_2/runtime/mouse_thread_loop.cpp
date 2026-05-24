@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "capture.h"
@@ -22,32 +23,49 @@ void handleEasyNoRecoil(MouseThread& mouseThread)
     {
         std::lock_guard<std::mutex> lock(mouseThread.input_method_mutex);
         int recoil_compensation = static_cast<int>(config.easynorecoilstrength);
+        const std::string inputMethod = config.input_method;
 
-        if (arduinoSerial)
+        if (inputMethod == "TEENSY41_HID")
         {
-            arduinoSerial->move(0, recoil_compensation);
+            if (teensy41RawHid)
+                teensy41RawHid->move(0, recoil_compensation);
         }
-        else if (rp2350Serial)
+        else if (inputMethod == "RAZER")
         {
-            rp2350Serial->move(0, recoil_compensation);
+            if (rzctlMouse)
+                rzctlMouse->mouse_xy(0, recoil_compensation);
         }
-        else if (gHub)
+        else if (inputMethod == "ARDUINO")
         {
-            gHub->mouse_xy(0, recoil_compensation);
+            if (arduinoSerial)
+                arduinoSerial->move(0, recoil_compensation);
         }
-        else if (kmboxNetSerial)
+        else if (inputMethod == "RP2350")
         {
-            kmboxNetSerial->move(0, recoil_compensation);
+            if (rp2350Serial)
+                rp2350Serial->move(0, recoil_compensation);
         }
-        else if (kmboxASerial)
+        else if (inputMethod == "GHUB")
         {
-            kmboxASerial->move(0, recoil_compensation);
+            if (gHub)
+                gHub->mouse_xy(0, recoil_compensation);
         }
-        else if (makcuSerial)
+        else if (inputMethod == "KMBOX_NET")
         {
-            makcuSerial->move(0, recoil_compensation);
+            if (kmboxNetSerial)
+                kmboxNetSerial->move(0, recoil_compensation);
         }
-        else
+        else if (inputMethod == "KMBOX_A")
+        {
+            if (kmboxASerial)
+                kmboxASerial->move(0, recoil_compensation);
+        }
+        else if (inputMethod == "MAKCU")
+        {
+            if (makcuSerial)
+                makcuSerial->move(0, recoil_compensation);
+        }
+        else if (inputMethod == "WIN32")
         {
             INPUT input = { 0 };
             input.type = INPUT_MOUSE;
@@ -64,6 +82,7 @@ void mouseThreadFunction(MouseThread& mouseThread)
     int lastVersion = -1;
     std::vector<cv::Rect> boxes;
     std::vector<int> classes;
+    std::vector<float> confidences;
     MultiTargetTracker targetTracker;
     std::optional<AimbotTarget> activeTarget;
     auto lastTrackerUpdate = std::chrono::steady_clock::time_point::min();
@@ -86,6 +105,7 @@ void mouseThreadFunction(MouseThread& mouseThread)
             {
                 boxes = detectionBuffer.boxes;
                 classes = detectionBuffer.classes;
+                confidences = detectionBuffer.confidences;
                 lastVersion = detectionBuffer.version;
                 hasNewDetection = true;
             }
@@ -127,6 +147,7 @@ void mouseThreadFunction(MouseThread& mouseThread)
             targetTracker.update(
                 boxes,
                 classes,
+                confidences,
                 config.detection_resolution,
                 config.detection_resolution,
                 config.disable_headshot,

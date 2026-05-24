@@ -186,6 +186,7 @@ nvinfer1::ICudaEngine* buildEngineFromOnnx(const std::string& onnxFile, nvinfer1
     if (!plan)
     {
         std::cerr << "[TensorRT] ERROR: Could not build the engine" << std::endl;
+        cudaStreamDestroy(stream);
         delete parser;
         delete network;
         delete builder;
@@ -219,6 +220,8 @@ nvinfer1::ICudaEngine* buildEngineFromOnnx(const std::string& onnxFile, nvinfer1
         std::cerr << "[TensorRT] ERROR: Could not open file to write: " << engineFile << std::endl;
         delete serializedModel;
         delete engine;
+        delete plan;
+        delete runtime;
         delete parser;
         delete network;
         delete builder;
@@ -229,6 +232,7 @@ nvinfer1::ICudaEngine* buildEngineFromOnnx(const std::string& onnxFile, nvinfer1
     p.close();
 
     delete plan;
+    delete serializedModel;
     delete runtime;
     delete parser;
     delete network;

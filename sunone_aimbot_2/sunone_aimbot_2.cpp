@@ -25,6 +25,8 @@
 #include "overlay.h"
 #include "Game_overlay.h"
 #include "ghub.h"
+#include "rzctl.h"
+#include "Teensy41RawHid.h"
 #include "other_tools.h"
 #include "virtual_camera.h"
 #include "mem/gpu_resource_manager.h"
@@ -58,6 +60,8 @@ RP2350* rp2350Serial = nullptr;
 KmboxNetConnection* kmboxNetSerial = nullptr;
 KmboxAConnection* kmboxASerial = nullptr;
 MakcuConnection* makcuSerial = nullptr;
+Teensy41RawHid* teensy41RawHid = nullptr;
+RzctlMouse* rzctlMouse = nullptr;
 
 std::atomic<bool> detection_resolution_changed(false);
 std::atomic<bool> capture_method_changed(false);
@@ -185,6 +189,19 @@ void createInputDevices()
         makcuSerial = nullptr;
     }
 
+    if (teensy41RawHid)
+    {
+        delete teensy41RawHid;
+        teensy41RawHid = nullptr;
+    }
+
+    if (rzctlMouse)
+    {
+        rzctlMouse->mouse_close();
+        delete rzctlMouse;
+        rzctlMouse = nullptr;
+    }
+
     if (config.input_method == "ARDUINO")
     {
         std::cout << "[Mouse] Using Arduino method input." << std::endl;
@@ -201,6 +218,15 @@ void createInputDevices()
             rp2350Serial = nullptr;
         }
     }
+    else if (config.input_method == "TEENSY41_HID")
+    {
+        std::cout << "[Mouse] Using TEENSY41_HID input." << std::endl;
+        teensy41RawHid = new Teensy41RawHid(config);
+        if (!teensy41RawHid->isOpen())
+        {
+            std::cerr << "[Teensy41HID] RawHID device is not connected." << std::endl;
+        }
+    }
     else if (config.input_method == "GHUB")
     {
         std::cout << "[Mouse] Using Ghub method input." << std::endl;
@@ -210,6 +236,15 @@ void createInputDevices()
             std::cerr << "[Ghub] Error with opening mouse." << std::endl;
             delete gHub;
             gHub = nullptr;
+        }
+    }
+    else if (config.input_method == "RAZER")
+    {
+        std::cout << "[Mouse] Using Razer rzctl input." << std::endl;
+        rzctlMouse = new RzctlMouse();
+        if (!rzctlMouse->isOpen())
+        {
+            std::cerr << "[Razer] rzctl input is not connected." << std::endl;
         }
     }
     else if (config.input_method == "KMBOX_NET")
@@ -249,9 +284,13 @@ void createInputDevices()
             makcuSerial = nullptr;
         }
     }
-    else
+    else if (config.input_method == "WIN32")
     {
         std::cout << "[Mouse] Using default Win32 method input." << std::endl;
+    }
+    else
+    {
+        std::cerr << "[Mouse] Unknown input method: " << config.input_method << std::endl;
     }
 }
 
@@ -265,6 +304,8 @@ void assignInputDevices()
         globalMouseThread->setKmboxAConnection(kmboxASerial);
         globalMouseThread->setKmboxNetConnection(kmboxNetSerial);
         globalMouseThread->setMakcuConnection(makcuSerial);
+        globalMouseThread->setTeensy41RawHid(teensy41RawHid);
+        globalMouseThread->setRzctlMouse(rzctlMouse);
     }
 }
 
@@ -428,7 +469,9 @@ int main()
             gHub,
             kmboxASerial,
             kmboxNetSerial,
-            makcuSerial
+            makcuSerial,
+            rzctlMouse,
+            teensy41RawHid
         );
 
         globalMouseThread = &mouseThread;
@@ -489,14 +532,26 @@ int main()
         }
 
 #ifdef USE_CUDA
+        trt_detector.requestStop();
         trt_detThread.join();
 #endif
+
+        gameOverlayShouldExit.store(true);
+        if (gameOverlayThread.joinable()) gameOverlayThread.join();
+        if (gameOverlayPtr)
+        {
+            gameOverlayPtr->Stop();
+            delete gameOverlayPtr;
+            gameOverlayPtr = nullptr;
+        }
+
         mouseMovThread.join();
         overlayThread.join();
 
         if (arduinoSerial)
         {
             delete arduinoSerial;
+            arduinoSerial = nullptr;
         }
 
         if (rp2350Serial)
@@ -509,6 +564,32 @@ int main()
         {
             gHub->mouse_close();
             delete gHub;
+            gHub = nullptr;
+        }
+
+        if (rzctlMouse)
+        {
+            rzctlMouse->mouse_close();
+            delete rzctlMouse;
+            rzctlMouse = nullptr;
+        }
+
+        if (teensy41RawHid)
+        {
+            delete teensy41RawHid;
+            teensy41RawHid = nullptr;
+        }
+
+        if (kmboxNetSerial)
+        {
+            delete kmboxNetSerial;
+            kmboxNetSerial = nullptr;
+        }
+
+        if (makcuSerial)
+        {
+            delete makcuSerial;
+            makcuSerial = nullptr;
         }
 
         if (kmboxASerial)
@@ -521,15 +602,6 @@ int main()
         {
             delete dml_detector;
             dml_detector = nullptr;
-        }
-
-        gameOverlayShouldExit.store(true);
-        if (gameOverlayThread.joinable()) gameOverlayThread.join();
-        if (gameOverlayPtr)
-        {
-            gameOverlayPtr->Stop();
-            delete gameOverlayPtr;
-            gameOverlayPtr = nullptr;
         }
 
         return 0;

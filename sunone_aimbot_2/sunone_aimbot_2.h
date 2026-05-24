@@ -13,6 +13,8 @@
 #include "KmboxNetConnection.h"
 #include "KmboxAConnection.h"
 #include "Makcu.h"
+#include "Teensy41RawHid.h"
+#include "rzctl.h"
 #include <mutex>
 
 extern Config config;
@@ -27,6 +29,8 @@ extern RP2350* rp2350Serial;
 extern KmboxNetConnection* kmboxNetSerial;
 extern KmboxAConnection* kmboxASerial;
 extern MakcuConnection* makcuSerial;
+extern Teensy41RawHid* teensy41RawHid;
+extern RzctlMouse* rzctlMouse;
 extern std::atomic<bool> input_method_changed;
 extern std::atomic<bool> aiming;
 extern std::atomic<bool> shooting;

@@ -13,6 +13,7 @@
     <ClCompile Include="mouse\Arduino.cpp" />
     <ClCompile Include="mouse\RP2350.cpp" />
     <ClCompile Include="mouse\AimbotTarget.cpp" />
+    <ClCompile Include="neural\NeuralTracker.cpp" />
     <ClCompile Include="detector\trt_detector.cpp" />
     <ClCompile Include="tensorrt\nvinf.cpp" />
     <ClCompile Include="keyboard\keyboard_listener.cpp" />
@@ -36,6 +37,7 @@
     <ClCompile Include="overlay\draw_buttons.cpp" />
     <ClCompile Include="overlay\draw_overlay.cpp" />
     <ClCompile Include="overlay\draw_debug.cpp" />
+    <ClCompile Include="overlay\draw_neural.cpp" />
     <ClCompile Include="detector\dml_detector.cpp" />
     <ClCompile Include="overlay\draw_stats.cpp" />
     <ClCompile Include="capture\capture_utils.cpp" />
@@ -84,6 +86,7 @@
     <ClInclude Include="mouse\Arduino.h" />
     <ClInclude Include="mouse\RP2350.h" />
     <ClInclude Include="mouse\AimbotTarget.h" />
+    <ClInclude Include="neural\NeuralTracker.h" />
     <ClInclude Include="detector\trt_detector.h" />
     <ClInclude Include="tensorrt\nvinf.h" />
     <ClInclude Include="keyboard\keyboard_listener.h" />
@@ -127,8 +130,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="$(MSBuildThisFileDirectory)..\..\runtimes\win-x64\native\onnxruntime.dll" />
-    <None Include="$(MSBuildThisFileDirectory)..\..\runtimes\win-x64\native\onnxruntime_providers_shared.dll" />
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest" />

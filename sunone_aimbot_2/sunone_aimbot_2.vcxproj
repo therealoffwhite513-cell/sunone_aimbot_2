@@ -62,6 +62,7 @@
     <ClCompile Include="mouse\Arduino.cpp" />
     <ClCompile Include="mouse\RP2350.cpp" />
     <ClCompile Include="mouse\AimbotTarget.cpp" />
+    <ClCompile Include="neural\NeuralTracker.cpp" />
     <ClCompile Include="overlay\draw_ai.cpp" />
     <ClCompile Include="overlay\draw_buttons.cpp" />
     <ClCompile Include="overlay\draw_capture.cpp" />
@@ -70,6 +71,7 @@
     <ClCompile Include="overlay\draw_depth.cpp" />
     <ClCompile Include="overlay\draw_game_overlay.cpp" />
     <ClCompile Include="overlay\draw_mouse.cpp" />
+    <ClCompile Include="overlay\draw_neural.cpp" />
     <ClCompile Include="overlay\draw_overlay.cpp" />
     <ClCompile Include="overlay\draw_stats.cpp" />
     <ClCompile Include="overlay\draw_target.cpp" />
@@ -134,6 +136,7 @@
     <ClInclude Include="mouse\Arduino.h" />
     <ClInclude Include="mouse\RP2350.h" />
     <ClInclude Include="mouse\AimbotTarget.h" />
+    <ClInclude Include="neural\NeuralTracker.h" />
     <ClInclude Include="overlay\config_dirty.h" />
     <ClInclude Include="overlay\draw_settings.h" />
     <ClInclude Include="overlay\Game_overlay.h" />
@@ -223,7 +226,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;USE_CUDA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(MSBuildProjectDirectory)\modules\glfw-3.4.bin.WIN64\include;$(MSBuildProjectDirectory)\modules\stb;$(MSBuildProjectDirectory)\modules\imgui-1.91.2\backends;$(MSBuildProjectDirectory)\modules\imgui-1.91.2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>

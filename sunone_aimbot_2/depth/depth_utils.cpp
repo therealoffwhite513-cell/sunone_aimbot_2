@@ -6,7 +6,6 @@ namespace depth_anything
 {
     std::tuple<cv::Mat, int, int> resize_depth(const cv::Mat& img, int w, int h)
     {
-        cv::Mat result;
         int nw;
         int nh;
         float aspectRatio = static_cast<float>(img.cols) / static_cast<float>(img.rows);
@@ -25,18 +24,15 @@ namespace depth_anything
         cv::Mat resized;
         cv::resize(img, resized, cv::Size(nw, nh));
 
-        result = cv::Mat::ones(cv::Size(w, h), CV_8UC1) * 128;
-        cv::cvtColor(result, result, cv::COLOR_GRAY2RGB);
-
         cv::Mat rgb;
         cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
 
-        cv::Mat out(h, w, CV_8UC3, 0.0);
-        cv::Mat re;
-        cv::resize(rgb, re, out.size(), 0, 0, cv::INTER_LINEAR);
-        re.copyTo(out(cv::Rect(0, 0, re.cols, re.rows)));
+        cv::Mat out(h, w, CV_8UC3, cv::Scalar(128, 128, 128));
+        const int xOffset = (w - rgb.cols) / 2;
+        const int yOffset = (h - rgb.rows) / 2;
+        rgb.copyTo(out(cv::Rect(xOffset, yOffset, rgb.cols, rgb.rows)));
 
-        return std::make_tuple(out, (w - nw) / 2, (h - nh) / 2);
+        return std::make_tuple(out, xOffset, yOffset);
     }
 }
 

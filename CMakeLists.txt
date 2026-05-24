@@ -6,8 +6,8 @@ if(NOT WIN32)
     message(FATAL_ERROR "sunone_aimbot_2 currently supports Windows builds only.")
 endif()
 
-if(NOT CMAKE_GENERATOR STREQUAL "Visual Studio 18 2026")
-    message(FATAL_ERROR "Only 'Visual Studio 18 2026' generator is supported. Current generator: ${CMAKE_GENERATOR}")
+if(NOT CMAKE_GENERATOR MATCHES "^Ninja")
+    message(FATAL_ERROR "Only Ninja generators are supported by the automated build. Current generator: ${CMAKE_GENERATOR}")
 endif()
 
 set(CMAKE_C_STANDARD 11)
@@ -20,38 +20,28 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(AIMBOT_USE_CUDA "Enable CUDA + TensorRT backend (USE_CUDA)" OFF)
 option(AIMBOT_COPY_RUNTIME_DLLS "Copy required runtime DLLs next to ai.exe after build" ON)
-
-set(AIMBOT_OPENCV_DML_PREBUILT_ROOT
-    "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/prebuilt/opencv/build"
-    CACHE PATH "Path to prebuilt OpenCV build directory used by DML defaults")
-
-set(_opencv_cuda_install_root "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/build/install")
-if(NOT AIMBOT_USE_CUDA)
-    set(_opencv_include_default "${AIMBOT_OPENCV_DML_PREBUILT_ROOT}/include")
-    set(_opencv_vc_glob "${AIMBOT_OPENCV_DML_PREBUILT_ROOT}/x64/vc*")
-else()
-    set(_opencv_include_default "${_opencv_cuda_install_root}/include")
-    set(_opencv_vc_glob "${_opencv_cuda_install_root}/x64/vc*")
-endif()
-
-file(GLOB _opencv_vc_dirs LIST_DIRECTORIES true "${_opencv_vc_glob}")
-if(_opencv_vc_dirs)
-    list(SORT _opencv_vc_dirs COMPARE NATURAL ORDER DESCENDING)
-    list(GET _opencv_vc_dirs 0 _opencv_vc_dir)
-else()
-    if(NOT AIMBOT_USE_CUDA)
-        set(_opencv_vc_dir "${AIMBOT_OPENCV_DML_PREBUILT_ROOT}/x64/vc17")
-    else()
-        set(_opencv_vc_dir "${_opencv_cuda_install_root}/x64/vc18")
-    endif()
-endif()
+option(AIMBOT_COPY_TRAINING_ASSETS "Copy deployable training scripts and base models next to ai.exe after build" ON)
+option(AIMBOT_BUILD_DEBUG_HARNESS "Build optional ai_debug NanoSim diagnostic harness" OFF)
 
 set(AIMBOT_PACKAGES_DIR "${CMAKE_SOURCE_DIR}/packages" CACHE PATH "Directory with restored NuGet packages")
-set(AIMBOT_OPENCV_INCLUDE_DIR "${_opencv_include_default}" CACHE PATH "Path to OpenCV include directory")
-set(AIMBOT_OPENCV_LIBRARY "${_opencv_vc_dir}/lib/opencv_world4130.lib" CACHE FILEPATH "Path to opencv_world4130.lib")
-set(AIMBOT_OPENCV_DLL "${_opencv_vc_dir}/bin/opencv_world4130.dll" CACHE FILEPATH "Path to opencv_world4130.dll")
-set(AIMBOT_TENSORRT_ROOT "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/TensorRT-10.14.1.48" CACHE PATH "Path to TensorRT root directory")
+set(AIMBOT_TRAINING_SOURCE_DIR
+    "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/training"
+    CACHE PATH "Path to deployable training scripts and base models")
+set(AIMBOT_NANOSIM_SOURCE_DIR
+    "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/nano_sim_3d"
+    CACHE PATH "Path to NanoSim 3D debug harness assets")
+set(AIMBOT_OPENCV_DML_ROOT
+    "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/build/dml"
+    CACHE PATH "Path to DML OpenCV build root")
+set(AIMBOT_OPENCV_CUDA_ROOT
+    "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/build/cuda/install"
+    CACHE PATH "Path to CUDA OpenCV install root")
+set(AIMBOT_OPENCV_INCLUDE_DIR "" CACHE PATH "Path to OpenCV include directory")
+set(AIMBOT_OPENCV_LIBRARY "" CACHE FILEPATH "Path to opencv_world*.lib")
+set(AIMBOT_OPENCV_DLL "" CACHE FILEPATH "Path to opencv_world*.dll")
+set(AIMBOT_TENSORRT_ROOT "" CACHE PATH "Path to TensorRT root directory")
 set(AIMBOT_GHUB_MOUSE_DLL "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/ghub_mouse.dll" CACHE FILEPATH "Path to ghub_mouse.dll")
+set(AIMBOT_RAZER_CONTROL_DLL "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/razer-controls/x64/Release/chroma_lighting.dll" CACHE FILEPATH "Path to chroma_lighting.dll")
 set(AIMBOT_CUDNN_ROOT "$ENV{ProgramW6432}/NVIDIA/CUDNN/v9.17" CACHE PATH "Path to cuDNN root directory (optional)")
 set(AIMBOT_CPPWINRT_INCLUDE_DIR "" CACHE PATH "Path to Windows SDK cppwinrt include directory")
 
@@ -72,6 +62,62 @@ function(aimbot_pick_latest_dir out_var glob_pattern)
     set(${out_var} "${_latest}" PARENT_SCOPE)
 endfunction()
 
+function(aimbot_find_opencv out_include out_library out_dll)
+    set(_found_include "")
+    set(_found_library "")
+    set(_found_dll "")
+
+    foreach(_root IN LISTS ARGN)
+        if(_found_library)
+            break()
+        endif()
+        if(NOT EXISTS "${_root}/include/opencv2/opencv.hpp")
+            continue()
+        endif()
+
+        file(GLOB _vc_dirs LIST_DIRECTORIES true "${_root}/x64/vc*")
+        if(NOT _vc_dirs)
+            continue()
+        endif()
+        list(SORT _vc_dirs COMPARE NATURAL ORDER DESCENDING)
+
+        foreach(_vc_dir IN LISTS _vc_dirs)
+            file(GLOB _opencv_world_libs "${_vc_dir}/lib/opencv_world*.lib")
+            if(NOT _opencv_world_libs)
+                continue()
+            endif()
+            list(SORT _opencv_world_libs COMPARE NATURAL ORDER DESCENDING)
+            foreach(_lib IN LISTS _opencv_world_libs)
+                get_filename_component(_stem "${_lib}" NAME_WE)
+                if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT CMAKE_CONFIGURATION_TYPES)
+                    if(_stem MATCHES "d$")
+                        continue()
+                    endif()
+                endif()
+                if(CMAKE_CONFIGURATION_TYPES)
+                    if(_stem MATCHES "d$")
+                        continue()
+                    endif()
+                endif()
+                set(_dll "${_vc_dir}/bin/${_stem}.dll")
+                if(EXISTS "${_dll}")
+                    set(_found_include "${_root}/include")
+                    set(_found_library "${_lib}")
+                    set(_found_dll "${_dll}")
+                    break()
+                endif()
+            endforeach()
+            if(_found_library)
+                break()
+            endif()
+        endforeach()
+    endforeach()
+
+    set(${out_include} "${_found_include}" PARENT_SCOPE)
+    set(${out_library} "${_found_library}" PARENT_SCOPE)
+    set(${out_dll} "${_found_dll}" PARENT_SCOPE)
+endfunction()
+
 function(aimbot_require_file path description)
     if(NOT EXISTS "${path}")
         message(FATAL_ERROR "${description} not found: ${path}")
@@ -89,11 +135,101 @@ function(aimbot_copy_if_exists target path)
     endif()
 endfunction()
 
+function(aimbot_copy_training_files target dest_subdir)
+    foreach(_path IN LISTS ARGN)
+        if(EXISTS "${_path}")
+            add_custom_command(
+                TARGET ${target}
+                POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target}>/${dest_subdir}"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_path}" "$<TARGET_FILE_DIR:${target}>/${dest_subdir}"
+                VERBATIM
+            )
+        endif()
+    endforeach()
+endfunction()
+
+function(aimbot_copy_training_assets target)
+    if(NOT EXISTS "${AIMBOT_TRAINING_SOURCE_DIR}")
+        message(WARNING "Training source directory was not found. Training assets will not be copied: ${AIMBOT_TRAINING_SOURCE_DIR}")
+        return()
+    endif()
+
+    set(_training_root_files
+        "${AIMBOT_TRAINING_SOURCE_DIR}/README.md"
+        "${AIMBOT_TRAINING_SOURCE_DIR}/requirements.txt"
+        "${AIMBOT_TRAINING_SOURCE_DIR}/__init__.py"
+        "${AIMBOT_TRAINING_SOURCE_DIR}/generate_pid_dataset.py"
+        "${AIMBOT_TRAINING_SOURCE_DIR}/train_pid_governor.py"
+        "${AIMBOT_TRAINING_SOURCE_DIR}/export_pid_governor_onnx.py"
+        "${AIMBOT_TRAINING_SOURCE_DIR}/generate_neural_tracker_dataset.py"
+        "${AIMBOT_TRAINING_SOURCE_DIR}/train_neural_tracker.py"
+        "${AIMBOT_TRAINING_SOURCE_DIR}/export_neural_tracker_onnx.py")
+    file(GLOB _training_pid_files
+        "${AIMBOT_TRAINING_SOURCE_DIR}/pid_governor/*.py")
+    file(GLOB _training_neural_files
+        "${AIMBOT_TRAINING_SOURCE_DIR}/neural_tracker/*.py")
+    file(GLOB _training_model_files
+        "${AIMBOT_TRAINING_SOURCE_DIR}/models/*.onnx"
+        "${AIMBOT_TRAINING_SOURCE_DIR}/models/*.json")
+
+    aimbot_copy_training_files(${target} "training" ${_training_root_files})
+    aimbot_copy_training_files(${target} "training/pid_governor" ${_training_pid_files})
+    aimbot_copy_training_files(${target} "training/neural_tracker" ${_training_neural_files})
+    aimbot_copy_training_files(${target} "training/models" ${_training_model_files})
+endfunction()
+
+function(aimbot_copy_nanosim_assets target)
+    if(NOT EXISTS "${AIMBOT_NANOSIM_SOURCE_DIR}/server.mjs")
+        message(WARNING "NanoSim source directory was not found. ai_debug will start without copied simulator assets: ${AIMBOT_NANOSIM_SOURCE_DIR}")
+        return()
+    endif()
+
+    add_custom_command(
+        TARGET ${target}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:${target}>/debug/nano_sim_3d"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target}>/debug"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIMBOT_NANOSIM_SOURCE_DIR}" "$<TARGET_FILE_DIR:${target}>/debug/nano_sim_3d"
+        VERBATIM
+    )
+endfunction()
+
 aimbot_pick_latest_dir(_onnxruntime_default "${AIMBOT_PACKAGES_DIR}/Microsoft.ML.OnnxRuntime.DirectML.*")
 aimbot_pick_latest_dir(_directml_default "${AIMBOT_PACKAGES_DIR}/Microsoft.AI.DirectML.*")
+aimbot_pick_latest_dir(_tensorrt_default "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/TensorRT-*")
 
 set(AIMBOT_ONNXRUNTIME_DIR "${_onnxruntime_default}" CACHE PATH "Path to Microsoft.ML.OnnxRuntime.DirectML.* package")
 set(AIMBOT_DIRECTML_DIR "${_directml_default}" CACHE PATH "Path to Microsoft.AI.DirectML.* package")
+if(AIMBOT_TENSORRT_ROOT STREQUAL "" OR
+   NOT EXISTS "${AIMBOT_TENSORRT_ROOT}/include/NvInfer.h" OR
+   NOT EXISTS "${AIMBOT_TENSORRT_ROOT}/lib/nvinfer_10.lib")
+    set(AIMBOT_TENSORRT_ROOT "${_tensorrt_default}" CACHE PATH "Path to TensorRT root directory" FORCE)
+endif()
+
+if(AIMBOT_USE_CUDA)
+    set(_opencv_candidate_roots
+        "${AIMBOT_OPENCV_CUDA_ROOT}"
+        "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/build/install")
+else()
+    set(_opencv_candidate_roots
+        "${AIMBOT_OPENCV_DML_ROOT}"
+        "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/prebuilt/opencv/build")
+endif()
+
+if(AIMBOT_OPENCV_INCLUDE_DIR STREQUAL "" OR
+   AIMBOT_OPENCV_LIBRARY STREQUAL "" OR
+   AIMBOT_OPENCV_DLL STREQUAL "" OR
+   NOT EXISTS "${AIMBOT_OPENCV_INCLUDE_DIR}/opencv2/opencv.hpp" OR
+   NOT EXISTS "${AIMBOT_OPENCV_LIBRARY}" OR
+   NOT EXISTS "${AIMBOT_OPENCV_DLL}")
+    aimbot_find_opencv(_opencv_include_detected _opencv_library_detected _opencv_dll_detected ${_opencv_candidate_roots})
+    if(NOT _opencv_library_detected STREQUAL "")
+        set(AIMBOT_OPENCV_INCLUDE_DIR "${_opencv_include_detected}" CACHE PATH "Path to OpenCV include directory" FORCE)
+        set(AIMBOT_OPENCV_LIBRARY "${_opencv_library_detected}" CACHE FILEPATH "Path to opencv_world*.lib" FORCE)
+        set(AIMBOT_OPENCV_DLL "${_opencv_dll_detected}" CACHE FILEPATH "Path to opencv_world*.dll" FORCE)
+    endif()
+endif()
 
 if(AIMBOT_CPPWINRT_INCLUDE_DIR STREQUAL "")
     if(DEFINED CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION AND DEFINED ENV{WindowsSdkDir})
@@ -161,9 +297,12 @@ set(AIMBOT_SOURCES
     "${SRC_DIR}/mouse/kmbox_net/kmboxNet.cpp"
     "${SRC_DIR}/mouse/Makcu.cpp"
     "${SRC_DIR}/mouse/mouse.cpp"
+    "${SRC_DIR}/mouse/rzctl.cpp"
+    "${SRC_DIR}/mouse/Teensy41RawHid.cpp"
     "${SRC_DIR}/mouse/Arduino.cpp"
     "${SRC_DIR}/mouse/RP2350.cpp"
     "${SRC_DIR}/mouse/AimbotTarget.cpp"
+    "${SRC_DIR}/neural/NeuralTracker.cpp"
     "${SRC_DIR}/overlay/draw_ai.cpp"
     "${SRC_DIR}/overlay/draw_buttons.cpp"
     "${SRC_DIR}/overlay/draw_capture.cpp"
@@ -172,6 +311,7 @@ set(AIMBOT_SOURCES
     "${SRC_DIR}/overlay/draw_depth.cpp"
     "${SRC_DIR}/overlay/draw_game_overlay.cpp"
     "${SRC_DIR}/overlay/draw_mouse.cpp"
+    "${SRC_DIR}/overlay/draw_neural.cpp"
     "${SRC_DIR}/overlay/draw_overlay.cpp"
     "${SRC_DIR}/overlay/draw_stats.cpp"
     "${SRC_DIR}/overlay/draw_target.cpp"
@@ -194,10 +334,10 @@ if(AIMBOT_USE_CUDA)
     endif()
     enable_language(CUDA)
     list(APPEND AIMBOT_SOURCES
+        "${SRC_DIR}/detector/cuda_preprocess.cu"
         "${SRC_DIR}/detector/trt_detector.cpp"
         "${SRC_DIR}/mem/gpu_resource_manager.cpp"
         "${SRC_DIR}/tensorrt/nvinf.cpp"
-        "${SRC_DIR}/detector/cuda_preprocess.cu"
     )
 endif()
 
@@ -235,6 +375,37 @@ if(AIMBOT_USE_CUDA)
     )
 endif()
 
+if(AIMBOT_BUILD_DEBUG_HARNESS)
+    add_executable(ai_debug
+        "${SRC_DIR}/debug_harness/debug_main.cpp"
+        "${SRC_DIR}/config/config.cpp"
+    )
+
+    set_target_properties(ai_debug PROPERTIES
+        OUTPUT_NAME "ai_debug"
+    )
+
+    if(MSVC)
+        set_target_properties(ai_debug PROPERTIES
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+        )
+        target_compile_options(ai_debug PRIVATE
+            $<$<COMPILE_LANGUAGE:CXX>:/W3>
+            $<$<COMPILE_LANGUAGE:CXX>:/sdl>
+            $<$<COMPILE_LANGUAGE:CXX>:/permissive->
+            $<$<COMPILE_LANGUAGE:CXX>:/EHsc>
+        )
+    endif()
+
+    target_include_directories(ai_debug PRIVATE "${SRC_DIR}")
+    target_compile_definitions(ai_debug PRIVATE UNICODE _UNICODE _CONSOLE)
+    if(AIMBOT_USE_CUDA)
+        target_compile_definitions(ai_debug PRIVATE USE_CUDA)
+    endif()
+    target_link_libraries(ai_debug PRIVATE shell32)
+    aimbot_copy_nanosim_assets(ai_debug)
+endif()
+
 target_include_directories(ai PRIVATE
     "${SRC_DIR}"
     "${SRC_DIR}/capture"
@@ -260,6 +431,8 @@ target_compile_definitions(ai PRIVATE
     UNICODE
     _UNICODE
     _CONSOLE
+    # C++/WinRT still includes the experimental coroutine header in C++17 mode.
+    _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
 )
 
 if(MSVC)
@@ -341,6 +514,7 @@ endif()
 if(AIMBOT_COPY_RUNTIME_DLLS)
     aimbot_copy_if_exists(ai "${AIMBOT_OPENCV_DLL}")
     aimbot_copy_if_exists(ai "${AIMBOT_GHUB_MOUSE_DLL}")
+    aimbot_copy_if_exists(ai "${AIMBOT_RAZER_CONTROL_DLL}")
     aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime.dll")
     aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime_providers_shared.dll")
     aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime_providers_dml.dll")
@@ -378,6 +552,10 @@ if(AIMBOT_COPY_RUNTIME_DLLS)
         aimbot_copy_if_exists(ai "${AIMBOT_TENSORRT_ROOT}/bin/nvinfer_10.dll")
         aimbot_copy_if_exists(ai "${AIMBOT_TENSORRT_ROOT}/bin/nvonnxparser_10.dll")
     endif()
+endif()
+
+if(AIMBOT_COPY_TRAINING_ASSETS)
+    aimbot_copy_training_assets(ai)
 endif()
 
 message(STATUS "Aimbot backend: ${AIMBOT_USE_CUDA}")

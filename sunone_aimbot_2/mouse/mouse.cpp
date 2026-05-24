@@ -11,6 +11,7 @@
 #include <vector>
 #include <iostream>
 #include <random>
+#include <string>
 
 #include "mouse.h"
 #include "capture.h"
@@ -18,6 +19,8 @@
 #include "RP2350.h"
 #include "sunone_aimbot_2.h"
 #include "ghub.h"
+#include "rzctl.h"
+#include "Teensy41RawHid.h"
 
 namespace
 {
@@ -49,7 +52,9 @@ MouseThread::MouseThread(
     GhubMouse* gHubMouse,
     KmboxAConnection* Kmbox_A_Connection,
     KmboxNetConnection* Kmbox_Net_Connection,
-    MakcuConnection* makcuConnection)
+    MakcuConnection* makcuConnection,
+    RzctlMouse* rzctlMouse,
+    Teensy41RawHid* teensy41RawHidConnection)
     : screen_width(resolution),
     screen_height(resolution),
     prediction_interval(predictionInterval),
@@ -68,6 +73,8 @@ MouseThread::MouseThread(
     kmbox_net(Kmbox_Net_Connection),
     makcu(makcuConnection),
     gHub(gHubMouse),
+    rzctl(rzctlMouse),
+    teensy41RawHid(teensy41RawHidConnection),
 
     prev_velocity_x(0.0),
     prev_velocity_y(0.0),
@@ -446,38 +453,64 @@ void MouseThread::sendMovementToDriver(int dx, int dy)
     }
 
     std::lock_guard<std::mutex> lock(input_method_mutex);
+    const std::string inputMethod = config.input_method;
 
-    if (kmbox_net)
+    if (inputMethod == "TEENSY41_HID")
     {
-        kmbox_net->move(dx, dy);
+        if (teensy41RawHid)
+            teensy41RawHid->move(dx, dy);
+        return;
     }
-    else if (kmbox_a)
+    else if (inputMethod == "RAZER")
     {
-        kmbox_a->move(dx, dy);
+        if (rzctl)
+            rzctl->mouse_xy(dx, dy);
+        return;
     }
-    else if (makcu)
+    else if (inputMethod == "KMBOX_NET")
     {
-        makcu->move(dx, dy);
+        if (kmbox_net)
+            kmbox_net->move(dx, dy);
+        return;
     }
-    else if (rp2350)
+    else if (inputMethod == "KMBOX_A")
     {
-        rp2350->move(dx, dy);
+        if (kmbox_a)
+            kmbox_a->move(dx, dy);
+        return;
     }
-    else if (arduino)
+    else if (inputMethod == "MAKCU")
     {
-        arduino->move(dx, dy);
+        if (makcu)
+            makcu->move(dx, dy);
+        return;
     }
-    else if (gHub)
+    else if (inputMethod == "RP2350")
     {
-        gHub->mouse_xy(dx, dy);
+        if (rp2350)
+            rp2350->move(dx, dy);
+        return;
     }
-    else
+    else if (inputMethod == "ARDUINO")
+    {
+        if (arduino)
+            arduino->move(dx, dy);
+        return;
+    }
+    else if (inputMethod == "GHUB")
+    {
+        if (gHub)
+            gHub->mouse_xy(dx, dy);
+        return;
+    }
+    else if (inputMethod == "WIN32")
     {
         INPUT in{ 0 };
         in.type = INPUT_MOUSE;
         in.mi.dx = dx;  in.mi.dy = dy;
         in.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_VIRTUALDESK;
         SendInput(1, &in, sizeof(INPUT));
+        return;
     }
 }
 
@@ -589,31 +622,48 @@ void MouseThread::pressMouse(const AimbotTarget& target)
     bool bScope = check_target_in_scope(target.x, target.y, target.w, target.h, bScope_multiplier);
     if (bScope && !mouse_pressed)
     {
-        if (kmbox_net)
+        const std::string inputMethod = config.input_method;
+        if (inputMethod == "TEENSY41_HID")
         {
-            kmbox_net->leftDown();
+            if (teensy41RawHid)
+                teensy41RawHid->press();
         }
-        else if (kmbox_a)
+        else if (inputMethod == "RAZER")
         {
-            kmbox_a->leftDown();
+            if (rzctl)
+                rzctl->mouse_down();
         }
-        else if (makcu)
+        else if (inputMethod == "KMBOX_NET")
         {
-            makcu->press(0);
+            if (kmbox_net)
+                kmbox_net->leftDown();
         }
-        else if (rp2350)
+        else if (inputMethod == "KMBOX_A")
         {
-            rp2350->press();
+            if (kmbox_a)
+                kmbox_a->leftDown();
         }
-        else if (arduino)
+        else if (inputMethod == "MAKCU")
         {
-            arduino->press();
+            if (makcu)
+                makcu->press(0);
         }
-        else if (gHub)
+        else if (inputMethod == "RP2350")
         {
-            gHub->mouse_down();
+            if (rp2350)
+                rp2350->press();
         }
-        else
+        else if (inputMethod == "ARDUINO")
+        {
+            if (arduino)
+                arduino->press();
+        }
+        else if (inputMethod == "GHUB")
+        {
+            if (gHub)
+                gHub->mouse_down();
+        }
+        else if (inputMethod == "WIN32")
         {
             INPUT input = { 0 };
             input.type = INPUT_MOUSE;
@@ -624,31 +674,48 @@ void MouseThread::pressMouse(const AimbotTarget& target)
     }
     else if (!bScope && mouse_pressed)
     {
-        if (kmbox_net)
+        const std::string inputMethod = config.input_method;
+        if (inputMethod == "TEENSY41_HID")
         {
-            kmbox_net->leftUp();
+            if (teensy41RawHid)
+                teensy41RawHid->release();
         }
-        else if (kmbox_a)
+        else if (inputMethod == "RAZER")
         {
-            kmbox_a->leftUp();
+            if (rzctl)
+                rzctl->mouse_up();
         }
-        else if (makcu)
+        else if (inputMethod == "KMBOX_NET")
         {
-            makcu->release(0);
+            if (kmbox_net)
+                kmbox_net->leftUp();
         }
-        else if (rp2350)
+        else if (inputMethod == "KMBOX_A")
         {
-            rp2350->release();
+            if (kmbox_a)
+                kmbox_a->leftUp();
         }
-        else if (arduino)
+        else if (inputMethod == "MAKCU")
         {
-            arduino->release();
+            if (makcu)
+                makcu->release(0);
         }
-        else if (gHub)
+        else if (inputMethod == "RP2350")
         {
-            gHub->mouse_up();
+            if (rp2350)
+                rp2350->release();
         }
-        else
+        else if (inputMethod == "ARDUINO")
+        {
+            if (arduino)
+                arduino->release();
+        }
+        else if (inputMethod == "GHUB")
+        {
+            if (gHub)
+                gHub->mouse_up();
+        }
+        else if (inputMethod == "WIN32")
         {
             INPUT input = { 0 };
             input.type = INPUT_MOUSE;
@@ -665,31 +732,48 @@ void MouseThread::releaseMouse()
 
     if (mouse_pressed)
     {
-        if (kmbox_net)
+        const std::string inputMethod = config.input_method;
+        if (inputMethod == "TEENSY41_HID")
         {
-            kmbox_net->leftUp();
+            if (teensy41RawHid)
+                teensy41RawHid->release();
         }
-        else if (kmbox_a)
+        else if (inputMethod == "RAZER")
         {
-            kmbox_a->leftUp();
+            if (rzctl)
+                rzctl->mouse_up();
         }
-        else if (makcu)
+        else if (inputMethod == "KMBOX_NET")
         {
-            makcu->release(0);
+            if (kmbox_net)
+                kmbox_net->leftUp();
         }
-        else if (rp2350)
+        else if (inputMethod == "KMBOX_A")
         {
-            rp2350->release();
+            if (kmbox_a)
+                kmbox_a->leftUp();
         }
-        else if (arduino)
+        else if (inputMethod == "MAKCU")
         {
-            arduino->release();
+            if (makcu)
+                makcu->release(0);
         }
-        else if (gHub)
+        else if (inputMethod == "RP2350")
         {
-            gHub->mouse_up();
+            if (rp2350)
+                rp2350->release();
         }
-        else
+        else if (inputMethod == "ARDUINO")
+        {
+            if (arduino)
+                arduino->release();
+        }
+        else if (inputMethod == "GHUB")
+        {
+            if (gHub)
+                gHub->mouse_up();
+        }
+        else if (inputMethod == "WIN32")
         {
             INPUT input = { 0 };
             input.type = INPUT_MOUSE;
@@ -850,4 +934,16 @@ void MouseThread::setGHubMouse(GhubMouse* newGHub)
 {
     std::lock_guard<std::mutex> lock(input_method_mutex);
     gHub = newGHub;
+}
+
+void MouseThread::setRzctlMouse(RzctlMouse* newRzctl)
+{
+    std::lock_guard<std::mutex> lock(input_method_mutex);
+    rzctl = newRzctl;
+}
+
+void MouseThread::setTeensy41RawHid(Teensy41RawHid* newTeensy41RawHid)
+{
+    std::lock_guard<std::mutex> lock(input_method_mutex);
+    teensy41RawHid = newTeensy41RawHid;
 }

@@ -1,276 +1,296 @@
-# Build From Source (Advanced Users)
+# Build Guide
 
-If you want to compile the project yourself or modify code, follow these instructions.
+This guide explains the current build system in plain terms first, then adds the technical details needed for local development.
 
-## 1. Requirements
+## Which Builder Should I Use?
 
-* **Visual Studio 2026 Community** ([Download](https://visualstudio.microsoft.com/vs/community/))
-* **Windows 10 or 11 (x64)**
-* **Windows SDK 10.0.26100.0** or newer
-* **CMake** ([Download](https://cmake.org/))
-* **OpenCV 4.13.0**
-* **\[For CUDA version]**
+| Tool | Best for | What it does |
+|---|---|---|
+| `BUILDER.bat` | Most people building from source. | Opens an interactive choice for DML or CUDA, prepares dependencies, configures CMake, and builds. |
+| `BUILDER.ps1` | Same as above, but easier to script. | Lets you pass `-Backend DML` or `-Backend CUDA` directly. |
+| `build_no-options.bat` | Fast local rebuilds after the full build already worked once. | Rebuilds `ai` from an existing build tree, or `ai_debug` with `-DebugHarness`. No downloads, updates, NuGet restore, OpenCV setup, or dependency prompts. |
+| `tools/build_dml.ps1` | Direct DML backend build. | Restores DML/ONNX dependencies and prepares the DML build tree. |
+| `tools/build_cuda.ps1` | Direct CUDA/TensorRT backend build. | Resolves CUDA/TensorRT/OpenCV CUDA dependencies and prepares the CUDA build tree. |
 
-  * [CUDA Toolkit 13.1](https://developer.nvidia.com/cuda-13-1-0-download-archive)
-  * [cuDNN 9.17.1](https://developer.nvidia.com/cudnn-downloads)
-  * [TensorRT-10.14.1.48](https://developer.nvidia.com/tensorrt/download/10x)
-* **\[For DML version]**
+If you are unsure, run `BUILDER.bat`.
 
-  * Use prebuilt OpenCV package (include/lib/dll), no OpenCV build required.
-  * One-time setup script:
-    `powershell -ExecutionPolicy Bypass -File tools/setup_opencv_dml.ps1`
-* Other dependencies:
+## Requirements
 
-  * [simpleIni](https://github.com/brofield/simpleini/blob/master/SimpleIni.h)
-  * [serial](https://github.com/wjwwood/serial)
-  * [GLFW](https://www.glfw.org/download.html)
-  * [ImGui](https://github.com/ocornut/imgui)
+### Required for Both Builds
 
-## 2. Placement of Third-Party Modules and Libraries
+- Windows 10 or Windows 11.
+- Visual Studio 2022 or Build Tools with the **Desktop development with C++** workload.
+- Windows SDK with C++/WinRT headers.
+- CMake.
+- PowerShell.
+- Python if the build needs to bootstrap missing training base models.
 
-Before building the project, **download and place all third-party dependencies** in the following directories inside your project structure:
+The builder can download or restore some project dependencies when you allow it. It cannot install Visual Studio for you.
 
-**Required folders inside your repository:**
+### DML Build Requirements
 
-```
-sunone_aimbot_2/
-└── sunone_aimbot_2/
-    └── modules/
-```
+- A Windows GPU/driver that supports DirectML.
+- NuGet packages restored by the build scripts:
+  - `Microsoft.ML.OnnxRuntime.DirectML`
+  - `Microsoft.AI.DirectML`
+- OpenCV DML layout under:
 
-**Place each dependency as follows:**
-
-| Library   | Path                                                              |
-| --------- | ----------------------------------------------------------------- |
-| SimpleIni | `sunone_aimbot_2/sunone_aimbot_2/modules/SimpleIni.h`         |
-| serial    | `sunone_aimbot_2/sunone_aimbot_2/modules/serial/`             |
-| TensorRT  | `sunone_aimbot_2/sunone_aimbot_2/modules/TensorRT-10.14.1.48/` |
-| GLFW      | `sunone_aimbot_2/sunone_aimbot_2/modules/glfw-3.4.bin.WIN64/` |
-| OpenCV    | `sunone_aimbot_2/sunone_aimbot_2/modules/opencv/`             |
-
-* **SimpleIni:**
-  Download [`SimpleIni.h`](https://github.com/brofield/simpleini/blob/master/SimpleIni.h)
-  Place in `modules/`.
-
-* **serial:**
-  Download the [`serial`](https://github.com/wjwwood/serial) library (whole folder).
-  For CMake build, this library is compiled from sources automatically (no separate `serial.sln` build step).
-
-* **TensorRT:**
-  Download [TensorRT-10.14.1.48](https://developer.nvidia.com/tensorrt/download/10x)
-  Place the folder as shown above.
-
-* **GLFW:**
-  Download [GLFW Windows binaries](https://www.glfw.org/download.html)
-  Place the folder as shown above.
-
-* **OpenCV:**
-  For DML, run `tools/setup_opencv_dml.ps1` (downloads prebuilt OpenCV package).
-  For CUDA, use your custom OpenCV build with CUDA support.
-
-**Example structure after setup:**
-
-```
-sunone_aimbot_2/
-└── sunone_aimbot_2/
-	└── modules/
-		├── SimpleIni.h
-        ├── serial/
-        ├── TensorRT-10.14.1.48/
-        ├── glfw-3.4.bin.WIN64/
-        └── opencv/
+```text
+sunone_aimbot_2\modules\opencv\build\dml
 ```
 
-## 3. How to Build OpenCV 4.13.0 with CUDA Support (For CUDA Version Only)
+The DML builder can prepare the OpenCV layout when downloads are enabled.
 
-> This section is **only required** if you want to use the CUDA (TensorRT) version and need OpenCV with CUDA support.
-> For DML build, skip this step — you can use the pre-built OpenCV DLL.
+### CUDA Build Requirements
 
-**Fast path (recommended):**
+- NVIDIA GPU.
+- CUDA Toolkit.
+- TensorRT 10 Windows binary SDK.
+- OpenCV built with CUDA under:
 
-Use helper script from repository root:
+```text
+sunone_aimbot_2\modules\opencv\build\cuda\install
+```
+
+The CUDA builder can guide dependency downloads and build OpenCV CUDA when downloads are enabled. OpenCV CUDA builds are large and can take a while.
+
+## Full Interactive Build
+
+From the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/build_opencv_cuda.ps1 -AutoDetectCudaArch
+.\BUILDER.bat
 ```
 
-The script requires CMake generator `Visual Studio 18 2026`.
+Choose:
+
+- `DML` for the DirectML build.
+- `CUDA` for the CUDA + TensorRT build.
+
+The batch file keeps the console open after a double-click run so you can read errors.
+
+## Full Scripted Build
+
+DML:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILDER.ps1 -Backend DML
+```
+
+CUDA:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILDER.ps1 -Backend CUDA
+```
 
 Useful options:
 
-* Set architecture explicitly:
-
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File tools/build_opencv_cuda.ps1 -CudaArchBin 8.6
-  ```
-
-* Build OpenCV for popular consumer NVIDIA architectures (GTX 16 / RTX 20 / 30 / 40 / 50):
-
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File tools/build_opencv_cuda.ps1 -CudaArchBin all
-  ```
-
-* Reuse already downloaded sources:
-
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File tools/build_opencv_cuda.ps1 -SkipDownload
-  ```
-
-* Configure only (without build):
-
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File tools/build_opencv_cuda.ps1 -ConfigureOnly
-  ```
-
-**Manual path:**
-
-1. **Download Sources**
-
-	* [OpenCV 4.13.0](https://github.com/opencv/opencv/releases/tag/4.13.0)
-	* [OpenCV Contrib 4.13.0](https://github.com/opencv/opencv_contrib/releases/tag/4.13.0)
-	* [CMake](https://cmake.org/download/)
-	* [CUDA Toolkit 13.1](https://developer.nvidia.com/cuda-13-1-0-download-archive)
-	* [cuDNN 9.17.1](https://developer.nvidia.com/cudnn-downloads)
-
-2. **Prepare Directories**
-
-	* Create:
-		`sunone_aimbot_2/sunone_aimbot_2/modules/opencv/`
-		`sunone_aimbot_2/sunone_aimbot_2/modules/opencv/build`
-	* Extract `opencv-4.13.0` into
-		`sunone_aimbot_2/sunone_aimbot_2/modules/opencv/opencv-4.13.0`
-	* Extract `opencv_contrib-4.13.0` into
-		`sunone_aimbot_2/sunone_aimbot_2/modules/opencv/opencv_contrib-4.13.0`
-	* install cuDNN
-		Default install path `C:/Program Files/NVIDIA/CUDNN/v9.17`
-
-3. **Configure with CMake**
-
-	* Open CMake GUI
-	* Source code:
-		`sunone_aimbot_2/sunone_aimbot_2/modules/opencv/opencv-4.13.0`
-	* Build directory:
-		`sunone_aimbot_2/sunone_aimbot_2/modules/opencv/build`
-	* Click **Configure**
-		(Choose "Visual Studio 18 2026", x64)
-
-4. **Enable CUDA Options**
-
-	* After first configure, set the following:
-
-		* `WITH_CUDA` = ON
-		* `WITH_CUBLAS` = ON
-		* `ENABLE_FAST_MATH` = ON
-		* `CUDA_FAST_MATH` = ON
-		* `WITH_CUDNN` = ON
-		* `CUDNN_LIBRARY` =
-			`.../sunone_aimbot_2/sunone_aimbot_2/modules/cudnn/lib/x64/cudnn.lib`
-		* `CUDNN_INCLUDE_DIR` =
-			`.../sunone_aimbot_2/sunone_aimbot_2/modules/cudnn/include`
-		* `CUDA_ARCH_BIN` =
-			See [CUDA Wikipedia](https://en.wikipedia.org/wiki/CUDA) for your GPU.
-			Example for RTX 3080-Ti: `8.6`
-		* `OPENCV_DNN_CUDA` = ON
-		* `OPENCV_EXTRA_MODULES_PATH` =
-			`.../sunone_aimbot_2/sunone_aimbot_2/modules/opencv/opencv_contrib-4.13.0/modules`
-		* `BUILD_opencv_world` = ON
-	* Uncheck:
-
-		* `WITH_NVCUVENC`
-		* `WITH_NVCUVID`
-	 
-	* Click **Configure** again
-		(make sure nothing is reset)
-	* Click **Generate**
-
-5. **Build in Visual Studio**
-
-   * Open `sunone_aimbot_2/sunone_aimbot_2/modules/opencv/build/OpenCV.sln`
-     or click "Open Project" in CMake
-   * Set build config: **x64 | Release**
-   * Build `ALL_BUILD` target (can take up to 2 hours)
-   * Then build `INSTALL` target
-
-6. **Copy Resulting DLLs**
-
-   * DLLs:
-     `sunone_aimbot_2/sunone_aimbot_2/modules/opencv/build/install/x64/vc*/bin/`
-   * LIBs:
-     `sunone_aimbot_2/sunone_aimbot_2/modules/opencv/build/install/x64/vc*/lib/`
-   * Includes:
-     `sunone_aimbot_2/sunone_aimbot_2/modules/opencv/build/install/include/opencv2`
-   * Copy needed DLLs (`opencv_world4130.dll`, etc.) next to your project’s executable.
-
-## 4. Notes on OpenCV for CUDA/DML
-
-* **For CUDA build (TensorRT backend):**
-
-  * You **must** build OpenCV with CUDA support (see the guide above).
-  * Place all built DLLs (e.g., `opencv_world4130.dll`) next to your executable or in the `modules` folder.
-* **For DML build (DirectML backend):**
-
-  * Use prebuilt OpenCV package (include/lib/dll) if you **only** plan to use DirectML.
-  * OpenCV runtime for DML must not import CUDA (`cudnn/cublas/npp`) or GStreamer (`gst*`) DLLs.
-  * If you want to use both CUDA and DML modes in the same executable, you should always use your custom OpenCV build with CUDA enabled (it will work for both modes).
-* **Note:**
-  If you run the CUDA backend with non-CUDA OpenCV DLLs, the program will not work and may crash due to missing symbols.
-
-## 5. Configure and Build Project
-
-After sections 2-4 are complete, configure one backend with CMake.
-
-Use separate build directories for each backend:
-
-* **DML (DirectML):**
-
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File tools/setup_opencv_dml.ps1
-  Remove-Item build/dml -Recurse -Force -ErrorAction SilentlyContinue
-  cmake -S . -B build/dml -G "Visual Studio 18 2026" -A x64 -DAIMBOT_USE_CUDA=OFF
-  cmake --build build/dml --config Release
-  ```
-
-  For DML build, OpenCV must be built **without CUDA** and **without GStreamer**.
-  The setup script downloads prebuilt OpenCV and places it in
-  `sunone_aimbot_2/modules/opencv/prebuilt/opencv/build` (auto-detected by CMake).
-
-* **CUDA (TensorRT):**
-
-  ```powershell
-  cmake -S . -B build/cuda -G "Visual Studio 18 2026" -A x64 `
-    -DAIMBOT_USE_CUDA=ON `
-    -DCMAKE_CUDA_FLAGS="--allow-unsupported-compiler" `
-    -DCUDA_NVCC_FLAGS="--allow-unsupported-compiler"
-  cmake --build build/cuda --config Release
-  ```
-
-Only `Visual Studio 18 2026` is supported for this project.
-
-If your dependencies are stored in non-default paths, pass CMake cache variables, for example:
-
 ```powershell
-cmake -S . -B build/dml -G "Visual Studio 18 2026" -A x64 `
-  -DAIMBOT_OPENCV_INCLUDE_DIR="C:/opencv/include" `
-  -DAIMBOT_OPENCV_LIBRARY="C:/opencv/lib/opencv_world4130.lib" `
-  -DAIMBOT_ONNXRUNTIME_DIR="C:/packages/Microsoft.ML.OnnxRuntime.DirectML.1.22.0" `
-  -DAIMBOT_CPPWINRT_INCLUDE_DIR="C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/cppwinrt"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILDER.ps1 -Backend CUDA -OpenCvAlreadyBuilt true
+powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILDER.ps1 -Backend CUDA -DownloadOrUpdateNeeded false
+powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILDER.ps1 -Backend DML -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILDER.ps1 -Backend DML -BuildDebugHarness
 ```
 
-You can open the generated solution from the build folder (`build/dml` or `build/cuda`) if you prefer building from Visual Studio UI.
+`BUILDER.ps1` forwards backend-specific arguments to `tools/build_dml.ps1` or `tools/build_cuda.ps1`.
 
-Run `ai.exe` from `<build-dir>/Release/`.
+## No-Options Rebuild
 
-## 6. Exporting AI Models
+Use this after the full builder has already prepared the selected backend at least once:
 
-* Convert PyTorch `.pt` models to ONNX:
+```powershell
+.\build_no-options.bat
+```
 
-  ```bash
-  pip install ultralytics -U
-  
-  # TensorRT
-  yolo export model=sunxds_0.8.0.pt format=onnx dynamic=true simplify=true
-  
-  # DML
-  yolo export model=sunxds_0.8.0.pt format=onnx simplify=true
-  ```
-* To convert `.onnx` to `.engine` for TensorRT, use the overlay export tab (open overlay with HOME).
+or:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_no-options.ps1 -Backend DML
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_no-options.ps1 -Backend CUDA
+```
+
+This script intentionally does only this:
+
+```text
+cmake --build build\<backend> --config Release --target ai --parallel
+```
+
+It is useful when you changed C++ or UI code and want a quick rebuild. It is not a dependency setup tool. If the build tree is missing, stale, or configured for the wrong dependency paths, run `BUILDER.bat` again.
+
+To rebuild the optional NanoSim debug target from an already-configured tree:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_no-options.ps1 -Backend DML -DebugHarness
+```
+
+That target exists only if the build tree was configured with `AIMBOT_BUILD_DEBUG_HARNESS=ON`.
+
+## Direct Backend Scripts
+
+DML:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build_dml.ps1
+```
+
+CUDA:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build_cuda.ps1
+```
+
+Examples:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build_cuda.ps1 -CudaArchBin 8.6
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build_cuda.ps1 -CudaArchBin all
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build_cuda.ps1 -SkipOpenCvBuild
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build_dml.ps1 -UseLatestPackages
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build_dml.ps1 -BuildDebugHarness
+```
+
+`-CudaArchBin all` expands to:
+
+```text
+7.5;8.0;8.6;8.7;8.8;8.9;9.0;10.0;10.3;11.0;12.0;12.1
+```
+
+## Output Folders
+
+Default outputs:
+
+```text
+build\dml\Release\ai.exe
+build\cuda\Release\ai.exe
+```
+
+When the debug harness is enabled, the additional output is:
+
+```text
+build\<backend>\Release\ai_debug.exe
+build\<backend>\Release\debug\nano_sim_3d
+```
+
+The output folder also receives runtime DLLs and selected assets that the executable needs at runtime. `ai_debug.exe` launches NanoSim in simulation mode by default, passes the current model/config knobs into the browser UI, and does not instantiate Razer, Teensy, Win32, kmbox, or other physical output paths.
+
+## Runtime Files Copied by CMake
+
+When `AIMBOT_COPY_RUNTIME_DLLS` is enabled, CMake copies available runtime DLLs next to `ai.exe`, including:
+
+- OpenCV runtime DLL.
+- `ghub_mouse.dll`, when present.
+- `chroma_lighting.dll`, when present.
+- ONNX Runtime DLLs.
+- DirectML DLL for DML support.
+- TensorRT and CUDA provider DLLs for CUDA builds.
+- cuDNN DLL if a compatible cuDNN layout is found.
+
+The Razer control DLL is expected at:
+
+```text
+sunone_aimbot_2\modules\razer-controls\x64\Release\chroma_lighting.dll
+```
+
+You can override its CMake cache path with `AIMBOT_RAZER_CONTROL_DLL`.
+
+## Training Assets
+
+The project copy of training tools lives here:
+
+```text
+sunone_aimbot_2\modules\training
+```
+
+When `AIMBOT_COPY_TRAINING_ASSETS` is enabled, CMake copies deployable training files to the runtime `training` folder:
+
+- Selected root training scripts.
+- PID governor helper scripts.
+- Neural tracker helper scripts.
+- Available `training\models\*.onnx` and matching metadata JSON files.
+
+It intentionally does **not** copy training datasets, caches, tests, or large working data folders.
+
+Before configuring CMake, the full DML/CUDA builders call the training bootstrap step. If a base ONNX model is missing, the builder attempts to run:
+
+- generate dataset
+- train
+- export ONNX
+
+for the missing base model. If Python or training dependencies are not available, either install the requirements for `sunone_aimbot_2\modules\training` or provide the expected ONNX model files manually.
+
+Expected base model names:
+
+```text
+sunone_aimbot_2\modules\training\models\pid_governor.onnx
+sunone_aimbot_2\modules\training\models\neural_tracker.onnx
+```
+
+## Important CMake Options
+
+| Option | Meaning |
+|---|---|
+| `AIMBOT_USE_CUDA` | `ON` for CUDA + TensorRT, `OFF` for DML. |
+| `AIMBOT_COPY_RUNTIME_DLLS` | Copies runtime DLLs beside `ai.exe`. |
+| `AIMBOT_COPY_TRAINING_ASSETS` | Copies selected training scripts and base models beside `ai.exe`. |
+| `AIMBOT_BUILD_DEBUG_HARNESS` | Builds the separate `ai_debug.exe` NanoSim diagnostic harness. |
+| `AIMBOT_TRAINING_SOURCE_DIR` | Source folder for deployable training assets. |
+| `AIMBOT_NANOSIM_SOURCE_DIR` | Source folder copied beside `ai_debug.exe` as `debug\nano_sim_3d`. |
+| `AIMBOT_RAZER_CONTROL_DLL` | Source path for `chroma_lighting.dll`. |
+| `AIMBOT_OPENCV_DML_ROOT` | DML OpenCV layout root. |
+| `AIMBOT_OPENCV_CUDA_ROOT` | CUDA OpenCV layout root. |
+| `AIMBOT_TENSORRT_ROOT` | TensorRT SDK root. |
+| `AIMBOT_CUDNN_ROOT` | Optional cuDNN root. |
+
+## CUDA Build Notes
+
+The CUDA build uses TensorRT for the main TRT backend and still links ONNX Runtime/DirectML libraries because DML-related runtime paths and tooling remain available in the shared project.
+
+For best performance:
+
+- Use a TensorRT `.engine` model with the CUDA build.
+- Keep the legacy `circle_mask` off unless you specifically need it.
+- Use Circle FOV instead of the old pixel mask for normal FOV limiting.
+- Turn off preview/debug windows when measuring capture performance, because preview requires CPU-readable pixels.
+
+The current CUDA preprocess path can intentionally run CPU preprocessing and then copy the tensor to CUDA input. That is useful for diagnosis and compatibility, but pure GPU paths are faster when available.
+
+## DML Build Notes
+
+The DML build expects ONNX models. A TensorRT `.engine` model will not run through the DML backend.
+
+If DML launches but does not detect targets:
+
+- Check that the selected AI model is `.onnx`.
+- Lower `confidence_threshold` temporarily.
+- Confirm the configured class IDs match the model.
+- Confirm `backend = DML`.
+- Check `dml_device_id` if the system has more than one GPU.
+
+## Validation
+
+Run the regression checks after build-system or integration changes:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\regression_checks.ps1
+```
+
+This checks important source contracts such as:
+
+- Razer and Teensy runtime wiring.
+- no-options builder behavior.
+- training asset packaging.
+- Circle FOV and legacy mask behavior.
+- config and UI integration contracts.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| `Build tree not found` from `build_no-options` | Run `BUILDER.bat` first for that backend. |
+| CUDA dependency missing | Install CUDA Toolkit and TensorRT Windows binary SDK, then rerun the CUDA builder. |
+| OpenCV CUDA compile errors | Check CUDA, Visual Studio compiler, OpenCV, and contrib compatibility. If you only need CPU preprocess for diagnosis, keep legacy GPU-heavy capture features off and rebuild the main app after the dependency tree is healthy. |
+| DML build cannot find OpenCV | Run the DML builder with downloads enabled or set OpenCV CMake paths manually. |
+| Missing `chroma_lighting.dll` | Build or copy the Razer controls DLL to `sunone_aimbot_2\modules\razer-controls\x64\Release\chroma_lighting.dll` or next to `ai.exe`. |
+| Training bootstrap fails | Install training requirements or place the expected `.onnx` files in `sunone_aimbot_2\modules\training\models`. |
+| App runs but Razer or Teensy control does nothing | The selected control method does not fall back. Check the selected `input_method`, the Razer DLL, or the Teensy RawHID endpoint. |
+| `ai_debug.exe` opens NanoSim but Auto Aim is paused | Press the configured pause binding, normally `F3`, or enable Auto Aim in NanoSim's Target tab. The toggle affects only the simulator. |

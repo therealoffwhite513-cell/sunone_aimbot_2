@@ -19,6 +19,9 @@ public:
     int capture_fps;
     int monitor_idx;
     bool circle_mask;
+    bool circle_fov_enabled;
+    int circle_fov_radius_percent;
+    bool circle_fov_show_preview;
     bool capture_borders;
     bool capture_cursor;
     std::string virtual_camera_name;
@@ -58,7 +61,7 @@ public:
 
     bool easynorecoil;
     float easynorecoilstrength;
-    std::string input_method; // "WIN32", "GHUB", "ARDUINO", "RP2350", "KMBOX_NET", "KMBOX_A", "MAKCU"
+    std::string input_method; // "WIN32", "GHUB", "RAZER", "ARDUINO", "RP2350", "TEENSY41_HID", "KMBOX_NET", "KMBOX_A", "MAKCU"
 
     // Wind mouse
     bool wind_mouse_enabled;
@@ -78,6 +81,16 @@ public:
     std::string rp2350_port;
     bool rp2350_16_bit_mouse;
     bool rp2350_enable_keys;
+
+    // Teensy 4.1 RawHID generic mouse bridge
+    std::string teensy_hid_serial;
+    std::string teensy_hid_vid_filter;
+    std::string teensy_hid_pid_filter;
+    int teensy_hid_usage_page;
+    int teensy_hid_usage_id;
+    int teensy_hid_open_index;
+    int teensy_hid_packet_timeout_ms;
+    int teensy_hid_reconnect_interval_ms;
 
     // kmbox_net
     std::string kmbox_net_ip;
@@ -107,6 +120,21 @@ public:
     bool export_enable_fp16;
 #endif
     bool fixed_input_size;
+
+    // Neural tracker association
+    bool neural_tracker_enabled;
+    std::string neural_tracker_runtime; // "CPU" or "CUDA"
+    std::string neural_tracker_model_path;
+    float neural_tracker_blend;
+    bool neural_tracker_log_enabled;
+    bool neural_tracker_debug_enabled;
+    std::string neural_tracker_log_path;
+
+    // PID governor controls
+    bool pid_governor_enabled;
+    int pid_governor_speed;
+    int pid_governor_blend;
+    int pid_governor_lead_percent;
 
     // CUDA
 #ifdef USE_CUDA
@@ -157,6 +185,7 @@ public:
     bool game_overlay_draw_future;
     bool game_overlay_draw_wind_tail;
     bool game_overlay_draw_frame;
+    bool game_overlay_draw_circle_fov;
     bool game_overlay_show_target_correction;
     int game_overlay_box_a;
     int game_overlay_box_r;

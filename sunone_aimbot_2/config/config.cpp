@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <unordered_map>
 #include <algorithm>
+#include <cctype>
 
 #include "config.h"
 #include "modules/SimpleIni.h"
@@ -61,7 +62,10 @@ bool Config::loadConfig(const std::string& filename)
         detection_resolution = 320;
         capture_fps = 60;
         monitor_idx = 0;
-        circle_mask = true;
+        circle_mask = false;
+        circle_fov_enabled = true;
+        circle_fov_radius_percent = 100;
+        circle_fov_show_preview = true;
         capture_borders = true;
         capture_cursor = true;
         virtual_camera_name = "None";
@@ -122,6 +126,16 @@ bool Config::loadConfig(const std::string& filename)
         rp2350_16_bit_mouse = true;
         rp2350_enable_keys = false;
 
+        // Teensy 4.1 RawHID generic mouse bridge
+        teensy_hid_serial = "AUTO";
+        teensy_hid_vid_filter = "AUTO";
+        teensy_hid_pid_filter = "AUTO";
+        teensy_hid_usage_page = 65451;
+        teensy_hid_usage_id = 512;
+        teensy_hid_open_index = 0;
+        teensy_hid_packet_timeout_ms = 2;
+        teensy_hid_reconnect_interval_ms = 500;
+
         // kmbox_net
         kmbox_net_ip = "10.42.42.42";
         kmbox_net_port = "1984";
@@ -160,6 +174,21 @@ bool Config::loadConfig(const std::string& filename)
         export_enable_fp16 = true;
 #endif
         fixed_input_size = false;
+
+        // Neural tracker association
+        neural_tracker_enabled = false;
+        neural_tracker_runtime = "CPU";
+        neural_tracker_model_path = "training/models/neural_tracker.onnx";
+        neural_tracker_blend = 0.35f;
+        neural_tracker_log_enabled = false;
+        neural_tracker_debug_enabled = false;
+        neural_tracker_log_path = "training/logs/neural_tracker_association.csv";
+
+        // PID governor controls
+        pid_governor_enabled = false;
+        pid_governor_speed = 5;
+        pid_governor_blend = 50;
+        pid_governor_lead_percent = 10;
 
         // CUDA
 #ifdef USE_CUDA
@@ -210,6 +239,7 @@ bool Config::loadConfig(const std::string& filename)
         game_overlay_draw_future = true;
         game_overlay_draw_wind_tail = true;
         game_overlay_draw_frame = true;
+        game_overlay_draw_circle_fov = true;
         game_overlay_show_target_correction = true;
         game_overlay_box_a = 255;
         game_overlay_box_r = 0;
@@ -386,7 +416,14 @@ bool Config::loadConfig(const std::string& filename)
 
     capture_fps = get_long("capture_fps", 60);
     monitor_idx = get_long("monitor_idx", 0);
-    circle_mask = get_bool("circle_mask", true);
+    const bool legacyCircleMask = get_bool("circle_mask", false);
+    const bool hasCircleFovSetting = ini.GetValue("", "circle_fov_enabled", nullptr) != nullptr;
+    circle_mask = hasCircleFovSetting ? legacyCircleMask : false;
+    circle_fov_enabled = get_bool("circle_fov_enabled", legacyCircleMask);
+    circle_fov_radius_percent = get_long("circle_fov_radius_percent", 100);
+    if (circle_fov_radius_percent < 1) circle_fov_radius_percent = 1;
+    if (circle_fov_radius_percent > 100) circle_fov_radius_percent = 100;
+    circle_fov_show_preview = get_bool("circle_fov_show_preview", true);
     capture_borders = get_bool("capture_borders", true);
     capture_cursor = get_bool("capture_cursor", true);
     virtual_camera_name = get_string("virtual_camera_name", "None");
@@ -447,6 +484,16 @@ bool Config::loadConfig(const std::string& filename)
     rp2350_16_bit_mouse = get_bool("rp2350_16_bit_mouse", true);
     rp2350_enable_keys = get_bool("rp2350_enable_keys", false);
 
+    // Teensy 4.1 RawHID generic mouse bridge
+    teensy_hid_serial = get_string("teensy_hid_serial", "AUTO");
+    teensy_hid_vid_filter = get_string("teensy_hid_vid_filter", "AUTO");
+    teensy_hid_pid_filter = get_string("teensy_hid_pid_filter", "AUTO");
+    teensy_hid_usage_page = get_long("teensy_hid_usage_page", 65451);
+    teensy_hid_usage_id = get_long("teensy_hid_usage_id", 512);
+    teensy_hid_open_index = get_long("teensy_hid_open_index", 0);
+    teensy_hid_packet_timeout_ms = get_long("teensy_hid_packet_timeout_ms", 2);
+    teensy_hid_reconnect_interval_ms = get_long("teensy_hid_reconnect_interval_ms", 500);
+
     // kmbox_net
     kmbox_net_ip = get_string("kmbox_net_ip", "10.42.42.42");
     kmbox_net_port = get_string("kmbox_net_port", "1984");
@@ -484,6 +531,22 @@ bool Config::loadConfig(const std::string& filename)
     export_enable_fp8 = get_bool("export_enable_fp8", true);
     export_enable_fp16 = get_bool("export_enable_fp16", true);
 #endif
+
+    // Neural tracker association
+    neural_tracker_enabled = get_bool("neural_tracker_enabled", false);
+    neural_tracker_runtime = get_string("neural_tracker_runtime", "CPU");
+    neural_tracker_model_path = get_string("neural_tracker_model_path", "training/models/neural_tracker.onnx");
+    neural_tracker_blend = (float)get_double("neural_tracker_blend", 0.35);
+    neural_tracker_log_enabled = get_bool("neural_tracker_log_enabled", false);
+    neural_tracker_debug_enabled = get_bool("neural_tracker_debug_enabled", false);
+    neural_tracker_log_path = get_string("neural_tracker_log_path", "training/logs/neural_tracker_association.csv");
+
+    // PID governor controls
+    pid_governor_enabled = get_bool("pid_governor_enabled", false);
+    pid_governor_speed = get_long("pid_governor_speed", 5);
+    pid_governor_blend = get_long("pid_governor_blend", 50);
+    pid_governor_lead_percent = get_long("pid_governor_lead_percent", 10);
+
     // CUDA
 #ifdef USE_CUDA
     use_cuda_graph = get_bool("use_cuda_graph", false);
@@ -543,6 +606,7 @@ bool Config::loadConfig(const std::string& filename)
     game_overlay_draw_future = get_bool("game_overlay_draw_future", true);
     game_overlay_draw_wind_tail = get_bool("game_overlay_draw_wind_tail", true);
     game_overlay_draw_frame = get_bool("game_overlay_draw_frame", true);
+    game_overlay_draw_circle_fov = get_bool("game_overlay_draw_circle_fov", true);
     game_overlay_show_target_correction = get_bool("game_overlay_show_target_correction", true);
     game_overlay_box_a = get_long("game_overlay_box_a", 255);
     game_overlay_box_r = get_long("game_overlay_box_r", 0);
@@ -654,12 +718,31 @@ bool Config::loadConfig(const std::string& filename)
     if (auto_label_max_boxes < 1) auto_label_max_boxes = 1;
     if (auto_label_max_boxes > 200) auto_label_max_boxes = 200;
 
+    std::transform(neural_tracker_runtime.begin(), neural_tracker_runtime.end(), neural_tracker_runtime.begin(),
+        [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    if (neural_tracker_runtime != "CPU" && neural_tracker_runtime != "CUDA")
+        neural_tracker_runtime = "CPU";
+    if (neural_tracker_model_path.empty())
+        neural_tracker_model_path = "training/models/neural_tracker.onnx";
+    if (neural_tracker_blend < 0.0f) neural_tracker_blend = 0.0f;
+    if (neural_tracker_blend > 1.0f) neural_tracker_blend = 1.0f;
+    if (neural_tracker_log_path.empty())
+        neural_tracker_log_path = "training/logs/neural_tracker_association.csv";
+
+    if (pid_governor_speed < 1) pid_governor_speed = 1;
+    if (pid_governor_speed > 100) pid_governor_speed = 100;
+    if (pid_governor_blend < 1) pid_governor_blend = 1;
+    if (pid_governor_blend > 100) pid_governor_blend = 100;
+    if (pid_governor_lead_percent < 0) pid_governor_lead_percent = 0;
+    if (pid_governor_lead_percent > 50) pid_governor_lead_percent = 50;
+
     // Classes
     class_player = get_long("class_player", 0);
     class_head = get_long("class_head", 1);
 
     // Debug window
     show_window = get_bool("show_window", true);
+    show_fps = get_bool("show_fps", false);
     screenshot_button = splitString(get_string("screenshot_button", "None"));
     screenshot_delay = get_long("screenshot_delay", 500);
     verbose = get_bool("verbose", false);
@@ -696,6 +779,9 @@ bool Config::saveConfig(const std::string& filename)
         << "capture_fps = " << capture_fps << "\n"
         << "monitor_idx = " << monitor_idx << "\n"
         << "circle_mask = " << (circle_mask ? "true" : "false") << "\n"
+        << "circle_fov_enabled = " << (circle_fov_enabled ? "true" : "false") << "\n"
+        << "circle_fov_radius_percent = " << circle_fov_radius_percent << "\n"
+        << "circle_fov_show_preview = " << (circle_fov_show_preview ? "true" : "false") << "\n"
         << "capture_borders = " << (capture_borders ? "true" : "false") << "\n"
         << "capture_cursor = " << (capture_cursor ? "true" : "false") << "\n"
         << "virtual_camera_name = " << virtual_camera_name << "\n"
@@ -744,7 +830,7 @@ bool Config::saveConfig(const std::string& filename)
         << std::fixed << std::setprecision(1)
         << "easynorecoilstrength = " << easynorecoilstrength << "\n"
 
-        << "# WIN32, GHUB, ARDUINO, RP2350, KMBOX_NET, KMBOX_A, MAKCU\n"
+        << "# WIN32, GHUB, RAZER, ARDUINO, RP2350, TEENSY41_HID, KMBOX_NET, KMBOX_A, MAKCU\n"
         << "input_method = " << input_method << "\n\n";
 
     // Wind mouse
@@ -768,6 +854,16 @@ bool Config::saveConfig(const std::string& filename)
         << "rp2350_port = " << rp2350_port << "\n"
         << "rp2350_16_bit_mouse = " << (rp2350_16_bit_mouse ? "true" : "false") << "\n"
         << "rp2350_enable_keys = " << (rp2350_enable_keys ? "true" : "false") << "\n\n";
+
+    file << "# Teensy 4.1 RawHID generic mouse bridge\n"
+        << "teensy_hid_serial = " << teensy_hid_serial << "\n"
+        << "teensy_hid_vid_filter = " << teensy_hid_vid_filter << "\n"
+        << "teensy_hid_pid_filter = " << teensy_hid_pid_filter << "\n"
+        << "teensy_hid_usage_page = " << teensy_hid_usage_page << "\n"
+        << "teensy_hid_usage_id = " << teensy_hid_usage_id << "\n"
+        << "teensy_hid_open_index = " << teensy_hid_open_index << "\n"
+        << "teensy_hid_packet_timeout_ms = " << teensy_hid_packet_timeout_ms << "\n"
+        << "teensy_hid_reconnect_interval_ms = " << teensy_hid_reconnect_interval_ms << "\n\n";
 
     // kmbox_net
     file << "# Kmbox_net\n"
@@ -805,9 +901,25 @@ bool Config::saveConfig(const std::string& filename)
 #endif
         ;
 
+    file << "\n# Neural tracker association\n"
+        << "neural_tracker_enabled = " << (neural_tracker_enabled ? "true" : "false") << "\n"
+        << "neural_tracker_runtime = " << neural_tracker_runtime << "\n"
+        << "neural_tracker_model_path = " << neural_tracker_model_path << "\n"
+        << std::fixed << std::setprecision(2)
+        << "neural_tracker_blend = " << neural_tracker_blend << "\n"
+        << "neural_tracker_log_enabled = " << (neural_tracker_log_enabled ? "true" : "false") << "\n"
+        << "neural_tracker_debug_enabled = " << (neural_tracker_debug_enabled ? "true" : "false") << "\n"
+        << "neural_tracker_log_path = " << neural_tracker_log_path << "\n\n";
+
+    file << "# PID governor controls\n"
+        << "pid_governor_enabled = " << (pid_governor_enabled ? "true" : "false") << "\n"
+        << "pid_governor_speed = " << pid_governor_speed << "\n"
+        << "pid_governor_blend = " << pid_governor_blend << "\n"
+        << "pid_governor_lead_percent = " << pid_governor_lead_percent << "\n\n";
+
     // CUDA
 #ifdef USE_CUDA
-    file << "\n# CUDA\n"
+    file << "# CUDA\n"
         << "use_cuda_graph = " << (use_cuda_graph ? "true" : "false") << "\n"
         << "use_pinned_memory = " << (use_pinned_memory ? "true" : "false") << "\n"
         << "gpuMemoryReserveMB = " << gpuMemoryReserveMB << "\n"
@@ -859,6 +971,7 @@ bool Config::saveConfig(const std::string& filename)
         << "game_overlay_draw_future = " << (game_overlay_draw_future ? "true" : "false") << "\n"
         << "game_overlay_draw_wind_tail = " << (game_overlay_draw_wind_tail ? "true" : "false") << "\n"
         << "game_overlay_draw_frame = " << (game_overlay_draw_frame ? "true" : "false") << "\n"
+        << "game_overlay_draw_circle_fov = " << (game_overlay_draw_circle_fov ? "true" : "false") << "\n"
         << "game_overlay_show_target_correction = " << (game_overlay_show_target_correction ? "true" : "false") << "\n"
         << "game_overlay_box_a = " << game_overlay_box_a << "\n"
         << "game_overlay_box_r = " << game_overlay_box_r << "\n"
@@ -938,6 +1051,7 @@ bool Config::saveConfig(const std::string& filename)
     // Active game
     file << "# Active game profile\n";
     file << "active_game = " << active_game << "\n\n";
+    file << std::defaultfloat << std::setprecision(6);
     file << "[Games]\n";
     for (auto& kv : game_profiles)
     {

@@ -1,173 +1,410 @@
-# C++ Guides and FAQ
+# Usage and Troubleshooting Guides
 
-## Installation (from source)
+This page is for practical setup and diagnosis. It avoids source-code detail unless it helps you solve a real problem.
 
-### Requirements
+## First Launch Checklist
 
-- Windows 10/11 x64
-- Visual Studio 2026 (Desktop C++)
-- Windows SDK 10.0.26100.0+
-- CMake
-- OpenCV 4.13.0
-- Optional for CUDA build:
-  - CUDA Toolkit 13.1
-  - cuDNN 9.17.1
-  - TensorRT 10.14.1.48
+1. Pick the right build:
+   - Use **DML** if you want easiest setup or non-NVIDIA compatibility.
+   - Use **CUDA + TensorRT** if you have the NVIDIA CUDA/TensorRT stack ready.
+2. Put the correct model beside the executable or in the configured model folder:
+   - DML uses `.onnx`.
+   - TensorRT uses `.engine`.
+3. Start the app once so `config.ini` is generated.
+4. Open the GUI or overlay and save settings from there when possible.
+5. Confirm the selected `input_method` matches the device/control path you actually want.
 
-### Build configurations
+## Choosing DML vs CUDA
 
-- `Release | x64 | DML` for DirectML build
-- `Release | x64 | CUDA` for TensorRT/CUDA build
+### Use DML When
 
-### Run
+- You want the least complicated Windows GPU path.
+- You are testing compatibility.
+- You do not want to install CUDA and TensorRT.
+- You are using an ONNX model.
 
-1. Build solution.
-2. Place required DLLs next to executable.
-3. Run `ai.exe`.
-4. Open overlay with `Home`.
+### Use CUDA + TensorRT When
 
-## FAQ
+- You have an NVIDIA GPU.
+- CUDA Toolkit and TensorRT are installed.
+- You want the highest-performance backend.
+- You are using a TensorRT `.engine` model.
 
-### Why is `config.ini` recreated?
+## DML Runs But Does Not Detect Anything
 
-If file is missing, app generates default config automatically.
-
-### How to reload config without restart?
-
-Use `button_reload_config` (default `F4`).
-
-### Which backend to use?
-
-- Supported NVIDIA + CUDA build: start with `TRT`.
-- Universal mode: `DML`.
-
-### UDP capture does not receive frames
-
-Check:
-
-1. `capture_method = udp_capture`
-2. receiver `udp_port` is open in firewall
-3. sender streams MJPEG to receiver IP/port
-4. set `udp_ip = 0.0.0.0` for diagnostics (accept any sender)
-
-### UDP capture over LAN (FFmpeg)
-
-Receiver PC setup:
-
-1. Set capture config:
+Check these first:
 
 ```ini
-capture_method = udp_capture
-udp_ip = 0.0.0.0
-udp_port = 1234
+backend = DML
+ai_model = your_model.onnx
+confidence_threshold = 0.10
+class_player = 0
+class_head = 1
 ```
 
-2. Open UDP port in Windows Firewall (run PowerShell as Administrator):
+Common causes:
 
-```powershell
-New-NetFirewallRule -DisplayName "capt UDP 1234" -Direction Inbound -Protocol UDP -LocalPort 1234 -Action Allow
-```
+- The selected model is a TensorRT `.engine` instead of `.onnx`.
+- `confidence_threshold` is too high for the model.
+- The model class IDs do not match `class_player` and `class_head`.
+- `dml_device_id` points to the wrong GPU.
+- The capture source is not actually showing the target content.
 
-3. Find receiver local IP (`IPv4 Address`) with:
+## CUDA Runs But GPU Usage Spikes
 
-```powershell
-ipconfig
-```
+Start by checking which features force CPU-readable frames:
 
-Sender PC (stream desktop to receiver over LAN):
+- Debug/preview window: `show_window = true`.
+- Data collection.
+- Screenshots.
+- Legacy `circle_mask = true`.
+- Any feature that needs pixels on the CPU for display or saving.
 
-```bash
-ffmpeg -f gdigrab -framerate 60 -i desktop -vf scale=640:640 -vcodec mjpeg -q:v 5 -f mjpeg udp://RECEIVER_IP:1234
-```
-
-Lower bandwidth / weaker PC variant:
-
-```bash
-ffmpeg -f gdigrab -framerate 30 -i desktop -vf scale=320:320 -vcodec mjpeg -q:v 7 -f mjpeg udp://RECEIVER_IP:1234
-```
-
-Optional camera source (example for OBS Virtual Camera):
-
-```bash
-ffmpeg -f dshow -i video="OBS Virtual Camera" -vf scale=640:640 -vcodec mjpeg -q:v 5 -f mjpeg udp://RECEIVER_IP:1234
-```
-
-### Virtual camera does not open
-
-- camera is busy in another app
-- stored camera name is outdated
-- set `virtual_camera_name = None` and refresh list
-
-## Performance Troubleshooting
-
-1. Start with lower load:
-   - `detection_resolution = 320` (or `160`)
-   - `capture_fps = 60`
-   - `show_window = false`
-   - `game_overlay_enabled = false`
-2. For fastest TRT capture path:
-   - `capture_method = duplication_api`
-   - `backend = TRT`
-   - `capture_use_cuda = true`
-   - `circle_mask = false`
-   - `depth_mask_enabled = false`
-3. Disable extra cost while testing:
-   - `depth_inference_enabled = false`
-   - `verbose = false`
-   - `screenshot_button = None`
-
-## Detection Troubleshooting
-
-1. Verify class mapping:
-   - `class_player`
-   - `class_head`
-2. Tune thresholds:
-   - `confidence_threshold`
-   - `nms_threshold`
-   - `max_detections`
-3. Validate input frame quality:
-   - increase `detection_resolution` if needed
-   - disable `circle_mask` during diagnostics
-   - disable `depth_mask_enabled` to exclude masking side effects
-
-## G HUB Input Method
-
-Set in config:
+For the current CUDA path, the recommended FOV limiter is:
 
 ```ini
-input_method = GHUB
+circle_mask = false
+circle_fov_enabled = true
 ```
 
-Current UI check expects G HUB version `13.1.4` and default install path `C:\Program Files\LGHUB`.
+If the spike disappears when the GUI or overlay is open, compare the capture diagnostics in both states. The GUI/preview can change whether the app requests CPU copies, which can make the runtime path different from the closed-GUI path.
 
-## Model Export and Conversion
+## Reading Capture Diagnostics
 
-### Export ONNX from `.pt`
+When diagnostic logging prints a line like this:
 
-```bash
-pip install ultralytics -U
-yolo export model=sunxds_0.5.6.pt format=onnx dynamic=true simplify=true
+```text
+[CaptureDiag] backend=TRT method=duplication_api capture_fps=60 use_cuda=true show_window=true prefer_gpu=false need_cpu_copy=true ...
 ```
 
-### Convert ONNX -> TensorRT engine
+Use these fields:
 
-Use overlay export tools in CUDA build.
+| Field | Meaning |
+|---|---|
+| `backend` | Active inference backend, such as `TRT` or `DML`. |
+| `method` | Capture method, usually `duplication_api`. |
+| `use_cuda` | Whether CUDA capture is allowed by config/build. |
+| `show_window` | Whether preview/debug window is open. |
+| `prefer_gpu` | Whether the capture path is trying to stay GPU-side. |
+| `need_cpu_copy` | Whether some active feature needs CPU-readable pixels. |
+| `gpu_attempts` | Number of GPU capture attempts. If this is `0`, the GPU path is not being attempted. |
+| `gpu_ok` | Successful GPU capture frames. |
+| `gpu_timeout`, `gpu_not_ready`, `gpu_lost` | GPU capture failure categories. |
+| `cuda_map_failed`, `cuda_array_failed`, `cuda_copy_failed` | CUDA interop/copy failure categories. |
+| `cpu_path_frames` | Frames captured through the CPU path. |
+| `trt_cpu_submitted` | Frames sent to TensorRT from CPU-prepared input. |
+| `trt_gpu_submitted` | Frames submitted to TensorRT from GPU path. |
+| `dml_submitted` | Frames sent to DirectML. |
 
-### Depth models
+For example, this pattern means TensorRT is running, but capture/preprocess is going through CPU frames:
 
-Place depth models in `models/depth`, then use Depth section buttons:
+```text
+prefer_gpu=false need_cpu_copy=true gpu_attempts=0 cpu_path_frames=6000 trt_cpu_submitted=6000
+```
 
-- `Load depth model`
-- `Export depth engine`
+That is not automatically wrong. It means some current setting or feature is selecting a CPU-readable path.
 
-## Project Structure (brief)
+## Circle FOV Guide
 
-Main folders under `sunone_aimbot_2/`:
+### Recommended Setup
 
-- `capture/` - capture backends
-- `config/` - config load/save/schema
-- `detector/` - DML/TRT inference wrappers
-- `mouse/` - input methods
-- `overlay/` - UI, stats, preview, game overlay
-- `depth/` and `tensorrt/` - CUDA-specific pipeline
-- `keyboard/` - key mapping/listeners
+```ini
+circle_mask = false
+circle_fov_enabled = true
+circle_fov_radius_percent = 100
+circle_fov_show_preview = true
+game_overlay_draw_circle_fov = true
+```
+
+Use the GUI or overlay to visualize the circle. Lower `circle_fov_radius_percent` to make the active area smaller.
+
+### Why Not Use `circle_mask`?
+
+`circle_mask` is the old pixel-mask path. It can add CPU work every frame and can interfere with CUDA capture behavior. It is kept for compatibility and diagnosis, but it should stay off for normal use.
+
+### Does Drawing the Circle Add Much Overhead?
+
+Drawing the circle in the GUI preview or game overlay is small compared with capture and inference. The expensive part was the legacy per-frame masking work, not the overlay depiction. The overlay depiction only matters when the GUI or overlay is actually open and configured to show it.
+
+## Control Method Guide
+
+Set the control method with:
+
+```ini
+input_method = WIN32
+```
+
+Valid values:
+
+```text
+WIN32, GHUB, RAZER, ARDUINO, RP2350, TEENSY41_HID, KMBOX_NET, KMBOX_A, MAKCU
+```
+
+Hardware methods are explicit. If you select `RAZER` or `TEENSY41_HID` and the matching runtime is not available, the app does not switch to another method for you.
+
+## Razer Setup
+
+Use:
+
+```ini
+input_method = RAZER
+```
+
+The runtime wrapper loads:
+
+```text
+chroma_lighting.dll
+```
+
+Expected source/build path:
+
+```text
+sunone_aimbot_2\modules\razer-controls\x64\Release\chroma_lighting.dll
+```
+
+The DLL can also be placed beside `ai.exe`. The wrapper searches runtime/module paths and requires the expected exported functions. If the DLL is missing or exports are wrong, Razer movement will not work and no fallback control method is used.
+
+Quick checks:
+
+- Confirm the DLL filename is exactly `chroma_lighting.dll`.
+- Confirm it is the same architecture as the app, usually x64.
+- Confirm `input_method = RAZER`.
+- Watch console logs for `[Razer]` messages.
+
+## Teensy 4.1 RawHID Setup
+
+Use:
+
+```ini
+input_method = TEENSY41_HID
+```
+
+Default HID filters:
+
+```ini
+teensy_hid_serial = AUTO
+teensy_hid_vid_filter = AUTO
+teensy_hid_pid_filter = AUTO
+teensy_hid_usage_page = 65451
+teensy_hid_usage_id = 512
+teensy_hid_open_index = 0
+```
+
+The firmware must match the expected RawHID-style packet interface. The current path sends report-ID-prefixed 64-byte packets.
+
+Button mapping used by the control path:
+
+| Button ID | Meaning |
+|---:|---|
+| `1` | Shoot / left mouse. |
+| `2` | Zoom / right mouse. |
+| `5` | Aiming / side button state. |
+
+Quick checks:
+
+- Confirm the Teensy is visible as a HID device.
+- Start with all filters set to `AUTO`.
+- If multiple matching devices exist, adjust `teensy_hid_open_index`.
+- Watch console logs for `[Mouse] Using TEENSY41_HID input.`
+
+## Overlay and GUI Behavior
+
+There are two separate display concepts:
+
+- The GUI/debug preview window, controlled mostly by `show_window`.
+- The game overlay, controlled by `game_overlay_enabled` and related overlay keys.
+
+The GUI preview can require CPU copies because it has to show captured pixels. The game overlay can draw boxes, future positions, frame outlines, Circle FOV, and optional icons.
+
+Useful overlay keys:
+
+```ini
+overlay_exclude_from_capture = true
+game_overlay_enabled = false
+game_overlay_draw_circle_fov = true
+```
+
+If you are measuring performance, test with the preview closed and then open so you can see how CPU-copy needs change.
+
+## Training Assets and Base Models
+
+Project training tools live in:
+
+```text
+sunone_aimbot_2\modules\training
+```
+
+The build packages selected training scripts and base ONNX models into the runtime `training` folder. It does not package training datasets, caches, or tests.
+
+Expected base ONNX models:
+
+```text
+training\models\pid_governor.onnx
+training\models\neural_tracker.onnx
+```
+
+If a base model is missing during a full build, the builder tries to generate a synthetic dataset, train, and export an ONNX model. That requires Python and the training dependencies. If you do not want the builder to train, provide the ONNX files manually.
+
+## Neural Tracker Guide
+
+Enable with:
+
+```ini
+neural_tracker_enabled = true
+neural_tracker_runtime = CPU
+neural_tracker_model_path = training/models/neural_tracker.onnx
+neural_tracker_blend = 0.35
+```
+
+Use `CPU` first for compatibility. Use `CUDA` only when the CUDA build and runtime dependencies are ready.
+
+If tracking becomes unstable, lower the blend or disable the feature:
+
+```ini
+neural_tracker_enabled = false
+```
+
+## PID Governor Guide
+
+Current config/UI controls:
+
+```ini
+pid_governor_enabled = false
+pid_governor_speed = 5
+pid_governor_blend = 50
+pid_governor_lead_percent = 10
+```
+
+Allowed ranges:
+
+- `pid_governor_speed`: `1..100`
+- `pid_governor_blend`: `1..100`
+- `pid_governor_lead_percent`: `0..50`
+
+These controls are available in the Neural tab and are packaged with the training assets. `pid_governor_lead_percent` is passed into NanoSim for manual tuning of target-speed lead. In the current source, PID governor runtime inference is not yet fully wired into the live mouse movement path, so enabling the setting should be treated as experimental/preparatory.
+
+## Data Collection Guide
+
+Data collection can be useful for model work but can affect performance:
+
+```ini
+collect_data_while_playing = false
+collect_only_when_targets_present = true
+collect_save_every_n_frames = 15
+collect_jpeg_quality = 95
+auto_label_data = true
+```
+
+If capture diagnostics show `need_cpu_copy=true`, data collection may be one reason.
+
+## Build Workflow for Everyday Changes
+
+Use the full builder when setting up a backend or changing dependencies:
+
+```powershell
+.\BUILDER.bat
+```
+
+Use the no-options builder after the backend already builds and you only changed app code:
+
+```powershell
+.\build_no-options.bat
+```
+
+The no-options builder only asks DML or CUDA and then builds the existing CMake target. It does not download, restore, update, or rebuild OpenCV.
+
+## NanoSim Debug Harness
+
+`ai_debug.exe` is an optional diagnostic executable separate from the main runtime. It reads the same `config.ini`, launches `debug\nano_sim_3d`, and opens NanoSim in simulation-only diagnostic mode.
+
+Build it by configuring a backend with the debug harness enabled:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\BUILDER.ps1 -Backend DML -BuildDebugHarness
+```
+
+After that, fast rebuilds can target only the harness:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_no-options.ps1 -Backend DML -DebugHarness
+```
+
+The NanoSim page keeps POV mouse/camera movement available, but starts with NanoSim as the movement runtime so the simulator can auto-aim without touching hardware. Its Main GUI Mirror uses the same tab names as the main overlay and shows the current project model selection plus key knobs, including Auto Aim, confidence, NMS, capture FPS, detection size, FOV, Circle FOV, neural tracker blend, and PID governor speed/blend.
+
+Press `F3`, or the configured `button_pause` binding, to activate or deactivate simulation Auto Aim. This changes only the NanoSim controller state. The simulator keeps the target close to center and renders it as a procedural cartoon 3D character so convergence issues are easier to diagnose without first fighting extreme target motion.
+
+Convergence issues are ranked from most problematic to least across detection, tracking, controller, movement, runtime timing, and multi-module interaction evidence.
+
+For future program-in-the-loop testing, NanoSim exposes:
+
+```text
+window.nanoSimGetSnapshot()
+window.nanoSimApplyMovement(dx, dy)
+```
+
+Those browser APIs affect only the simulator environment. They do not call Razer, Teensy, Win32, or any other physical output path.
+
+## Common Recipes
+
+### Lowest Setup Burden
+
+```ini
+backend = DML
+ai_model = sunxds_0.5.6.onnx
+input_method = WIN32
+circle_mask = false
+circle_fov_enabled = true
+```
+
+### CUDA/TensorRT Performance Test
+
+```ini
+backend = TRT
+ai_model = sunxds_0.5.6.engine
+capture_method = duplication_api
+capture_use_cuda = true
+circle_mask = false
+show_window = false
+collect_data_while_playing = false
+```
+
+Then check `[CaptureDiag]` output.
+
+### Razer Control Test
+
+```ini
+input_method = RAZER
+```
+
+Make sure `chroma_lighting.dll` is beside `ai.exe` or in:
+
+```text
+sunone_aimbot_2\modules\razer-controls\x64\Release
+```
+
+### Teensy Control Test
+
+```ini
+input_method = TEENSY41_HID
+teensy_hid_serial = AUTO
+teensy_hid_vid_filter = AUTO
+teensy_hid_pid_filter = AUTO
+```
+
+Start broad with `AUTO`, then narrow filters after the device is confirmed.
+
+## When Something Feels Wrong
+
+Use this order:
+
+1. Confirm build family: DML or CUDA.
+2. Confirm model type: `.onnx` for DML, `.engine` for TensorRT.
+3. Confirm capture is showing the expected content.
+4. Confirm `circle_mask = false` unless you are testing the legacy mask.
+5. Confirm selected `input_method` has its required runtime/device.
+6. Turn on useful logs or diagnostics.
+7. Run the regression checks after source changes:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\regression_checks.ps1
+```

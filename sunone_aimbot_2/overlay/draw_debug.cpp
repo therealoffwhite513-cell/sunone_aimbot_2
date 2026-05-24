@@ -16,6 +16,7 @@
 #include "overlay/config_dirty.h"
 #include "include/other_tools.h"
 #include "capture.h"
+#include "capture/circle_fov.h"
 #include "overlay/ui_sections.h"
 
 #ifdef USE_CUDA
@@ -34,6 +35,8 @@
 
 int prev_screenshot_delay = config.screenshot_delay;
 bool prev_verbose = config.verbose;
+bool prev_neural_tracker_log_enabled = config.neural_tracker_log_enabled;
+bool prev_neural_tracker_debug_enabled = config.neural_tracker_debug_enabled;
 
 static ID3D11Texture2D* g_debugTex = nullptr;
 static ID3D11ShaderResourceView* g_debugSRV = nullptr;
@@ -48,6 +51,8 @@ static char g_collectOutputDirBuffer[512] = {};
 static std::string g_collectOutputDirMirror;
 static char g_collectClassFilterBuffer[256] = {};
 static std::string g_collectClassFilterMirror;
+static char g_neuralTrackerLogPathBuffer[512] = {};
+static std::string g_neuralTrackerLogPathMirror;
 
 static void syncDebugTextBuffer(char* buffer, size_t buffer_size, std::string& mirror, const std::string& value)
 {
@@ -341,6 +346,17 @@ void draw_debug_frame()
     ImVec2 image_pos = ImGui::GetItemRectMin();
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
+    if (config.circle_fov_enabled && config.circle_fov_show_preview)
+    {
+        const cv::Size imageSize(texW, texH);
+        const cv::Point2f center = getCircleFovCenter(imageSize);
+        const float radius = getCircleFovRadiusPixels(imageSize, config.circle_fov_radius_percent) * debug_scale;
+        const ImVec2 circleCenter(
+            image_pos.x + center.x * debug_scale,
+            image_pos.y + center.y * debug_scale);
+        draw_list->AddCircle(circleCenter, radius, IM_COL32(80, 220, 255, 230), 96, 2.0f);
+    }
+
 #ifdef USE_CUDA
     if (config.depth_mask_enabled)
     {
@@ -439,6 +455,14 @@ void draw_capture_preview()
             OverlayConfig_MarkDirty();
         }
 
+        if (config.circle_fov_enabled)
+        {
+            if (ImGui::Checkbox("Show Circle Guide", &config.circle_fov_show_preview))
+            {
+                OverlayConfig_MarkDirty();
+            }
+        }
+
         if (config.show_window)
         {
             draw_debug_frame();
@@ -475,11 +499,38 @@ void draw_debug()
 
     changed |= drawDataCollectionSection();
 
+    syncDebugTextBuffer(
+        g_neuralTrackerLogPathBuffer,
+        sizeof(g_neuralTrackerLogPathBuffer),
+        g_neuralTrackerLogPathMirror,
+        config.neural_tracker_log_path);
+
+    if (OverlayUI::BeginSection("Neural Diagnostics", "debug_section_neural_diagnostics"))
+    {
+        if (ImGui::Checkbox("Log neural tracker associations", &config.neural_tracker_log_enabled))
+            changed = true;
+        if (ImGui::Checkbox("Show neural tracker debug", &config.neural_tracker_debug_enabled))
+            changed = true;
+
+        ImGui::SetNextItemWidth(OverlayUI::AdaptiveItemWidth(0.78f));
+        if (ImGui::InputText("Neural tracker log", g_neuralTrackerLogPathBuffer, IM_ARRAYSIZE(g_neuralTrackerLogPathBuffer)))
+        {
+            if (applyDebugTextBuffer(config.neural_tracker_log_path, g_neuralTrackerLogPathMirror, g_neuralTrackerLogPathBuffer))
+                changed = true;
+        }
+
+        OverlayUI::EndSection();
+    }
+
     if (prev_screenshot_delay != config.screenshot_delay ||
-        prev_verbose != config.verbose)
+        prev_verbose != config.verbose ||
+        prev_neural_tracker_log_enabled != config.neural_tracker_log_enabled ||
+        prev_neural_tracker_debug_enabled != config.neural_tracker_debug_enabled)
     {
         prev_screenshot_delay = config.screenshot_delay;
         prev_verbose = config.verbose;
+        prev_neural_tracker_log_enabled = config.neural_tracker_log_enabled;
+        prev_neural_tracker_debug_enabled = config.neural_tracker_debug_enabled;
         changed = true;
     }
 

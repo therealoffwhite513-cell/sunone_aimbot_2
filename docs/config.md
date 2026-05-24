@@ -1,390 +1,430 @@
-# C++ Configuration Reference (`config.ini`)
+# Configuration Guide
 
-This document describes `config.ini` for the C++ project in this repository.
+The runtime config is `config.ini`. It is created automatically the first time the app starts if it does not already exist.
 
-- Source of truth in code: `sunone_aimbot_2/config/config.cpp`
-- Config schema: `sunone_aimbot_2/config/config.h`
+Most settings are saved as simple root-level `key = value` lines. The only true INI section currently written by the app is `[Games]`, which stores game sensitivity profiles.
 
-## 1. How Config Loading Works
+For most users, the GUI is the safest way to edit settings. This page exists so you can also understand and edit the file directly.
 
-1. On first run, if `config.ini` does not exist, the app creates it with defaults.
-2. On startup, values are read from `config.ini`.
-3. If a key is missing, a fallback value is used.
-4. Some keys are clamped/validated during load (examples below).
-5. `F4` reloads config at runtime (`button_reload_config` by default).
+## Basic Rules
 
-## 2. Value Formats
+- Use `true` or `false` for booleans.
+- Use a dot for decimal values, for example `0.35`.
+- Button lists are comma-separated, for example `RightMouseButton,LeftShift`.
+- Paths may be relative to the executable folder.
+- If a value is outside its accepted range, the app clamps it or falls back to a valid default.
+- Razer and Teensy control methods do not fall back to another method when selected.
 
-- `bool`: `true` or `false`
-- `int`/`float`: regular numeric values
-- `string`: raw text after `=`
-- button lists: comma-separated key names, for example:
-  - `button_targeting = RightMouseButton`
-  - `button_exit = F2`
-  - `screenshot_button = LeftAlt,F10`
+The defaults below are the generated defaults for a fresh config. A few legacy missing-key fallbacks in source are different for backward compatibility; those are called out where they matter.
 
-Key names come from `sunone_aimbot_2/keyboard/keycodes.cpp` (examples: `LeftMouseButton`, `RightMouseButton`, `F1..F12`, `A..Z`, `Home`, `LeftAlt`, `RightControl`, `None`).
+## Quick Backend Setup
 
-## 3. Quick Examples
+### DML Build
 
-### Example A: UDP receiver in LAN
+Use ONNX models:
 
 ```ini
-capture_method = udp_capture
-udp_ip = 0.0.0.0
-udp_port = 1234
-detection_resolution = 640
-capture_fps = 60
 backend = DML
+ai_model = sunxds_0.5.6.onnx
 ```
 
-### Example B: CUDA + TensorRT with GPU direct capture
+If DML runs but does not detect anything, check that the model is `.onnx`, lower `confidence_threshold` temporarily, and confirm your class IDs.
+
+### CUDA + TensorRT Build
+
+Use TensorRT engine models:
 
 ```ini
-capture_method = duplication_api
 backend = TRT
+ai_model = sunxds_0.5.6.engine
 capture_use_cuda = true
-detection_resolution = 320
-capture_fps = 120
 circle_mask = false
-depth_mask_enabled = false
 ```
 
-### Example C: WinRT window capture by title
+Circle FOV can remain enabled. The old `circle_mask` should normally stay off.
+
+## Capture
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `capture_method` | `duplication_api` | Capture source. Common values are `duplication_api`, `winrt`, `virtual_camera`, and `udp_capture`. |
+| `capture_target` | `monitor` | Target type for capture. Usually `monitor`. |
+| `capture_window_title` | empty | Window title used when a window capture target is selected. |
+| `udp_ip` | `0.0.0.0` | Listen address for UDP capture. |
+| `udp_port` | `1234` | UDP capture port. |
+| `detection_resolution` | `320` | Square inference/capture processing size. Higher can improve detail but costs performance. |
+| `capture_fps` | `60` | Requested capture rate. |
+| `monitor_idx` | `0` | Monitor index for monitor capture. |
+| `circle_mask` | `false` | Legacy CPU pixel mask. Keep this off unless specifically testing it. |
+| `circle_fov_enabled` | `true` | Enables the current circular FOV limiter. |
+| `circle_fov_radius_percent` | `100` | Circle FOV radius as a percent of the processed capture area. Clamped to `1..100`. |
+| `circle_fov_show_preview` | `true` | Shows Circle FOV in the GUI preview when available. |
+| `capture_borders` | `true` | Include window borders when applicable. |
+| `capture_cursor` | `true` | Include cursor when applicable. |
+| `virtual_camera_name` | `None` | Camera name for virtual camera capture. |
+| `virtual_camera_width` | `1920` | Requested virtual camera width. |
+| `virtual_camera_heigth` | `1080` | Requested virtual camera height. The key is currently spelled `heigth` in the config for compatibility. |
+
+### Circle FOV vs Legacy Circle Mask
+
+Use `circle_fov_enabled` for normal circular aim limiting and overlay visualization.
+
+`circle_mask` is the older pixel mask. It can force extra CPU work and can prevent the fastest CUDA capture behavior. Existing configs that only had `circle_mask = true` are migrated so Circle FOV becomes enabled and the legacy mask is turned off.
+
+## Targeting
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `disable_headshot` | `false` | Disables head-specific targeting behavior. |
+| `body_y_offset` | `0.15` | Vertical target offset for body aim. |
+| `head_y_offset` | `0.05` | Vertical target offset for head aim. |
+| `auto_aim` | `false` | Enables automatic aim behavior when supported by current controls and buttons. |
+
+## Mouse Movement and Tracking
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `fovX` | `106` | Horizontal game FOV used for movement conversion. |
+| `fovY` | `74` | Vertical game FOV used for movement conversion. |
+| `minSpeedMultiplier` | `0.1` | Minimum movement multiplier. |
+| `maxSpeedMultiplier` | `0.1` | Maximum movement multiplier. |
+| `predictionInterval` | `0.01` | Prediction time step. |
+| `prediction_futurePositions` | `20` | Number of predicted future positions to keep/draw. |
+| `draw_futurePositions` | `true` | Draws predicted future positions in supported overlays. |
+| `kalman_enabled` | `true` | Enables Kalman smoothing/tracking. |
+| `kalman_process_noise_position` | `40.0` | Position process noise. Higher reacts faster but can be less stable. |
+| `kalman_process_noise_velocity` | `1800.0` | Velocity process noise. Higher follows quick movement more aggressively. |
+| `kalman_measurement_noise` | `35.0` | Detection measurement noise. Higher trusts detections less. |
+| `kalman_velocity_damping` | `0.08` | Damps velocity over time. |
+| `kalman_max_velocity` | `20000.0` | Caps estimated velocity. |
+| `kalman_warmup_frames` | `2` | Frames before Kalman output is considered warmed up. |
+| `kalman_compensate_detection_delay` | `true` | Compensates for capture/inference delay. |
+| `kalman_additional_prediction_ms` | `0.0` | Extra prediction time in milliseconds. |
+| `kalman_reset_timeout_sec` | `0.5` | Resets tracking after this long without detections. |
+| `snapRadius` | `1.5` | Close target snap radius. |
+| `nearRadius` | `25.0` | Radius where near-target behavior starts. |
+| `speedCurveExponent` | `3.0` | Curve shape for speed scaling. |
+| `snapBoostFactor` | `1.15` | Extra speed near snap radius. |
+| `easynorecoil` | `false` | Enables simple recoil compensation. |
+| `easynorecoilstrength` | `0.0` | Recoil compensation strength. |
+| `input_method` | `WIN32` | Output/control method. See below. |
+
+## Input Method
+
+Valid values:
+
+```text
+WIN32, GHUB, RAZER, ARDUINO, RP2350, TEENSY41_HID, KMBOX_NET, KMBOX_A, MAKCU
+```
+
+| Method | Plain meaning |
+|---|---|
+| `WIN32` | Standard Windows mouse events. |
+| `GHUB` | GHub DLL output if available. |
+| `RAZER` | Razer control DLL output through `chroma_lighting.dll`. |
+| `ARDUINO` | Serial Arduino mouse bridge. |
+| `RP2350` | Serial RP2350 mouse bridge. |
+| `TEENSY41_HID` | Teensy 4.1 RawHID control path only. |
+| `KMBOX_NET` | Network kmbox control. |
+| `KMBOX_A` | kmbox A serial/HID style control. |
+| `MAKCU` | MAKCU serial control. |
+
+When a hardware method is selected, the app expects that method to work. Razer and Teensy are intentionally explicit and do not silently switch to Win32 or another fallback method.
+
+## Wind Mouse
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `wind_mouse_enabled` | `false` | Enables wind-mouse style movement. |
+| `wind_G` | `18.0` | Gravity term. |
+| `wind_W` | `15.0` | Wind term. |
+| `wind_M` | `10.0` | Max step term. |
+| `wind_D` | `8.0` | Distance term. |
+
+## Device Control Sections
+
+### Arduino
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `arduino_baudrate` | `115200` | Serial baud rate. |
+| `arduino_port` | `COM0` | Serial port. |
+| `arduino_16_bit_mouse` | `false` | Use 16-bit mouse movement protocol. |
+| `arduino_enable_keys` | `false` | Allow key/button handling through Arduino. |
+
+### RP2350
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `rp2350_baudrate` | `115200` | Serial baud rate. |
+| `rp2350_port` | `COM0` | Serial port. |
+| `rp2350_16_bit_mouse` | `true` | Use 16-bit mouse movement protocol. |
+| `rp2350_enable_keys` | `false` | Allow key/button handling through RP2350. |
+
+### Teensy 4.1 RawHID
+
+Use this section only with:
 
 ```ini
-capture_method = winrt
-capture_target = window
-capture_window_title = Counter-Strike 2
-capture_cursor = false
-capture_borders = false
+input_method = TEENSY41_HID
 ```
 
-### Example D: Virtual camera capture
+| Key | Default | Meaning |
+|---|---:|---|
+| `teensy_hid_serial` | `AUTO` | Serial filter. Use `AUTO` to skip serial filtering. |
+| `teensy_hid_vid_filter` | `AUTO` | Vendor ID filter. Use `AUTO` to skip VID filtering. |
+| `teensy_hid_pid_filter` | `AUTO` | Product ID filter. Use `AUTO` to skip PID filtering. |
+| `teensy_hid_usage_page` | `65451` | HID usage page, decimal form of `0xFFAB`. |
+| `teensy_hid_usage_id` | `512` | HID usage ID, decimal form of `0x0200`. |
+| `teensy_hid_open_index` | `0` | Which matching HID device to open if multiple match. |
+| `teensy_hid_packet_timeout_ms` | `2` | Packet write/read timeout. |
+| `teensy_hid_reconnect_interval_ms` | `500` | Reconnect interval after device loss. |
+
+The Teensy path sends report-ID-prefixed 64-byte packets and expects matching firmware.
+
+### Kmbox Net
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `kmbox_net_ip` | `10.42.42.42` | Device IP address. |
+| `kmbox_net_port` | `1984` | Device port. |
+| `kmbox_net_uuid` | `DEADC0DE` | Device UUID/token. |
+
+### Kmbox A
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `kmbox_a_pidvid` | empty | Combined PID/VID string in `PPPPVVVV` format. |
+
+### MAKCU
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `makcu_baudrate` | `115200` | Serial baud rate. |
+| `makcu_port` | `COM0` | Serial port. |
+
+## Mouse Shooting
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `auto_shoot` | `false` | Enables automatic shooting behavior. |
+| `bScope_multiplier` | `1.0` | Scope multiplier. Missing-key fallback is `1.2` for older configs. |
+
+## AI
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `backend` | `TRT` in CUDA, `DML` in DML | Inference backend. |
+| `dml_device_id` | `0` | DirectML device index. |
+| `ai_model` | CUDA: `sunxds_0.5.6.engine`, DML: `sunxds_0.5.6.onnx` | Model file. Missing-key fallback currently uses `sunxds_0.8.0.*` for older configs. |
+| `confidence_threshold` | `0.10` | Minimum detection confidence. Missing-key fallback is `0.15`. |
+| `nms_threshold` | `0.50` | Non-max suppression threshold. |
+| `max_detections` | `100` | Maximum detections kept per frame. Missing-key fallback is `20`. |
+| `export_enable_fp8` | `false` in generated CUDA config | TensorRT export option, CUDA builds only. Missing-key fallback is `true`. |
+| `export_enable_fp16` | `true` in CUDA | TensorRT export option, CUDA builds only. |
+
+`fixed_input_size` exists as an internal runtime config field but is not currently written to the generated config file.
+
+## Neural Tracker
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `neural_tracker_enabled` | `false` | Enables optional neural association/tracking. |
+| `neural_tracker_runtime` | `CPU` | `CPU` or `CUDA`. Invalid values become `CPU`. |
+| `neural_tracker_model_path` | `training/models/neural_tracker.onnx` | ONNX model path. |
+| `neural_tracker_blend` | `0.35` | Blend amount between standard tracking and neural tracking. Clamped `0.0..1.0`. |
+| `neural_tracker_log_enabled` | `false` | Enables neural association logging. |
+| `neural_tracker_debug_enabled` | `false` | Enables extra neural tracker diagnostics. |
+| `neural_tracker_log_path` | `training/logs/neural_tracker_association.csv` | Log output path. |
+
+If the model is missing or the feature is disabled, the app uses the normal tracking path.
+
+## PID Governor Controls
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `pid_governor_enabled` | `false` | Enables PID governor settings in the Neural tab/config surface. |
+| `pid_governor_speed` | `5` | Speed slider value. Clamped `1..100`. |
+| `pid_governor_blend` | `50` | Blend slider value. Clamped `1..100`. |
+| `pid_governor_lead_percent` | `10` | Target velocity lead percentage for NanoSim/manual PID tuning. Clamped `0..50`. |
+
+The current source packages PID governor training assets and exposes UI/config controls. The target lead value is wired into NanoSim for manual convergence testing. Runtime mouse-governor inference is not yet fully wired as a live replacement for the movement controller.
+
+## CUDA
+
+These keys are written only in CUDA builds.
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `use_cuda_graph` | `false` | Enables CUDA graph path where supported. |
+| `use_pinned_memory` | `false` | Generated default for pinned memory. Missing-key fallback is `true`. |
+| `gpuMemoryReserveMB` | `2048` | GPU memory reserve. |
+| `enableGpuExclusiveMode` | `true` | Enables exclusive GPU mode behavior where supported by the app. |
+| `capture_use_cuda` | `true` | Allows CUDA capture path usage. |
+
+CUDA capture can still create CPU copies when preview, debugging, data collection, or other CPU-readable features need pixels.
+
+## System
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `cpuCoreReserveCount` | `4` | CPU cores to avoid using heavily. |
+| `systemMemoryReserveMB` | `2048` | System memory reserve. |
+
+## Buttons
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `button_targeting` | `RightMouseButton` | Aim/targeting button list. |
+| `button_shoot` | `LeftMouseButton` | Shoot button list. |
+| `button_zoom` | `RightMouseButton` | Zoom/scope button list. |
+| `button_exit` | `F2` | Exit hotkey. |
+| `button_pause` | `F3` | Pause hotkey. |
+| `button_reload_config` | `F4` | Reload config hotkey. |
+| `button_open_overlay` | `Home` | Open overlay hotkey. |
+| `enable_arrows_settings` | `false` | Enables arrow-key settings behavior. |
+
+Use `None` to disable a button where supported.
+
+## Overlay
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `overlay_opacity` | `225` | Overlay opacity, `0..255`. |
+| `overlay_ui_scale` | `1.0` | Overlay UI scale. |
+| `overlay_exclude_from_capture` | `true` | Attempts to keep overlay out of captured frames. |
+
+## Depth
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `depth_inference_enabled` | `true` | Enables depth inference feature. |
+| `depth_model_path` | `depth_anything_v2.engine` | Depth model path. |
+| `depth_fps` | `100` | Depth update FPS. Minimum `0`. |
+| `depth_colormap` | `18` | OpenCV colormap index. Clamped `0..21`. |
+| `depth_mask_enabled` | `false` | Enables depth mask. |
+| `depth_mask_fps` | `5` | Depth mask update FPS. Minimum `0`. |
+| `depth_mask_near_percent` | `20` | Near-depth percent. Clamped `1..100`. |
+| `depth_mask_expand` | `0` | Expand mask pixels. Clamped `0..128`. |
+| `depth_mask_hold_frames` | `0` | Hold mask for extra frames. Clamped `0..120`. |
+| `depth_mask_alpha` | `90` | Mask alpha. Clamped `0..255`. |
+| `depth_mask_invert` | `false` | Inverts depth mask. |
+| `depth_debug_overlay_enabled` | `false` | Shows depth debug overlay. |
+
+## Game Overlay
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `game_overlay_enabled` | `false` | Enables in-game overlay rendering. |
+| `game_overlay_max_fps` | `0` | Overlay FPS cap. `0` means uncapped/default behavior. |
+| `game_overlay_draw_boxes` | `true` | Draw detection boxes. |
+| `game_overlay_draw_future` | `true` | Draw predicted future positions. |
+| `game_overlay_draw_wind_tail` | `true` | Draw wind mouse trail. |
+| `game_overlay_draw_frame` | `true` | Draw frame border. |
+| `game_overlay_draw_circle_fov` | `true` | Draw Circle FOV in the game overlay. |
+| `game_overlay_show_target_correction` | `true` | Draw target correction indicator. |
+| `game_overlay_box_a/r/g/b` | `255/0/255/0` | Box color as alpha/red/green/blue. |
+| `game_overlay_frame_a/r/g/b` | `180/255/255/255` | Frame color as alpha/red/green/blue. |
+| `game_overlay_box_thickness` | `2.0` | Detection box line thickness. |
+| `game_overlay_frame_thickness` | `1.5` | Frame line thickness. |
+| `game_overlay_future_point_radius` | `5.0` | Future-point radius. |
+| `game_overlay_future_alpha_falloff` | `1.0` | Future-point alpha falloff. |
+| `game_overlay_icon_enabled` | `false` | Enables drawing an icon marker. |
+| `game_overlay_icon_path` | `icon.png` | Icon file path. |
+| `game_overlay_icon_width` | `64` | Icon width. |
+| `game_overlay_icon_height` | `64` | Icon height. |
+| `game_overlay_icon_offset_x` | `0.0` | Icon X offset. |
+| `game_overlay_icon_offset_y` | `0.0` | Icon Y offset. |
+| `game_overlay_icon_anchor` | `center` | Icon anchor: `center`, `top`, `bottom`, or `head`. |
+| `game_overlay_icon_class` | `-1` | Class to draw icon for. `-1` means all. |
+
+## Aim Simulation Overlay
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `aim_sim_enabled` | `false` | Enables aim simulation overlay. |
+| `aim_sim_x` | `24` | Window X position. |
+| `aim_sim_y` | `24` | Window Y position. |
+| `aim_sim_width` | `560` | Width. Clamped `220..1920`. |
+| `aim_sim_height` | `360` | Height. Clamped `180..1080`. |
+| `aim_sim_fps_min` | `90` | Minimum simulated FPS. Clamped `15..360`. |
+| `aim_sim_fps_max` | `120` | Maximum simulated FPS. Clamped `15..360`. |
+| `aim_sim_fps_jitter` | `0.15` | FPS jitter. Clamped `0.0..0.8`. |
+| `aim_sim_capture_delay_ms` | `6.0` | Simulated capture delay. Clamped `0..80`. |
+| `aim_sim_inference_delay_ms` | `12.0` | Simulated inference delay. Clamped `0..120`. |
+| `aim_sim_use_live_inference` | `true` | Uses live inference where available. |
+| `aim_sim_input_delay_ms` | `2.0` | Simulated input delay. Clamped `0..60`. |
+| `aim_sim_extra_delay_ms` | `2.0` | Extra simulated delay. Clamped `0..60`. |
+| `aim_sim_target_max_speed` | `560.0` | Simulated target max speed. Clamped `20..2500`. |
+| `aim_sim_target_accel` | `1850.0` | Simulated target acceleration. Clamped `20..10000`. |
+| `aim_sim_target_stop_chance` | `0.25` | Stop probability. Clamped `0.0..0.95`. |
+| `aim_sim_show_observed` | `true` | Draw observed target. |
+| `aim_sim_show_history` | `true` | Draw history. |
+| `aim_sim_show_kalman_debug` | `true` | Draw Kalman debug information. |
+
+## Data Collection
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `collect_data_while_playing` | `false` | Save data while running. |
+| `collect_only_when_aimbot_running` | `false` | Collect only while the aimbot is actively running. |
+| `collect_only_when_targets_present` | `true` | Collect only frames with targets. |
+| `collect_save_every_n_frames` | `15` | Save interval. Clamped `1..600`. |
+| `collect_jpeg_quality` | `95` | JPEG quality. Clamped `50..100`. |
+| `collect_output_dir` | empty | Output folder. |
+| `auto_label_data` | `true` | Write labels automatically. |
+| `auto_label_min_conf` | `0.30` | Auto-label confidence. Clamped `0.01..0.99`. |
+| `auto_label_max_boxes` | `20` | Auto-label box limit. Clamped `1..200`. |
+| `auto_label_record_classes` | empty | Optional class filter list. |
+
+Data collection needs CPU-readable frames, so it can change capture performance diagnostics.
+
+## Classes
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `class_player` | `0` | Model class ID for player/body detections. |
+| `class_head` | `1` | Model class ID for head detections. |
+
+## Debug
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `show_window` | `true` | Shows debug/preview window. This can require CPU frame copies. |
+| `show_fps` | `false` | Shows FPS counter. |
+| `screenshot_button` | `None` | Screenshot hotkey. |
+| `screenshot_delay` | `500` | Screenshot delay in milliseconds. |
+| `verbose` | `false` | Enables more logging. |
+
+`ai_debug.exe` reads the same config file and passes selected values such as backend, model path, available models, `auto_aim`, `button_pause`, capture FPS, detection thresholds, FOV, Circle FOV, input method, neural tracker blend, and PID governor settings into NanoSim for diagnostics. It does not add new `config.ini` keys and does not use the selected physical control method.
+
+## Game Profiles
+
+The active profile is selected by:
 
 ```ini
-capture_method = virtual_camera
-virtual_camera_name = None
-virtual_camera_width = 1920
-virtual_camera_heigth = 1080
+active_game = UNIFIED
 ```
 
-### Example E: Lower latency and load for weak GPU
-
-```ini
-detection_resolution = 160
-capture_fps = 60
-confidence_threshold = 0.25
-max_detections = 20
-game_overlay_enabled = false
-show_window = false
-depth_inference_enabled = false
-```
-
-## 4. Full Key Reference
-
-Defaults below are first-run defaults from `config.cpp`.
-
-### 4.1 Capture
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `capture_method` | string | `duplication_api` | `duplication_api`, `winrt`, `virtual_camera`, `udp_capture` |
-| `capture_target` | string | `monitor` | Used by WinRT: `monitor` or `window` |
-| `capture_window_title` | string | empty | Used when `capture_method=winrt` and `capture_target=window` |
-| `udp_ip` | string | `0.0.0.0` | For `udp_capture`; `0.0.0.0` accepts any sender |
-| `udp_port` | int | `1234` | Clamped to `1..65535` |
-| `detection_resolution` | int | `320` | Allowed: `160`, `320`, `640`; others become `320` |
-| `capture_fps` | int | `60` | UI range `0..240`; `0` means uncapped capture limiter |
-| `monitor_idx` | int | `0` | Monitor index for monitor-based capture |
-| `circle_mask` | bool | `true` | Circular crop mask |
-| `capture_borders` | bool | `true` | WinRT border option |
-| `capture_cursor` | bool | `true` | WinRT cursor option |
-| `virtual_camera_name` | string | `None` | `None` means auto-select |
-| `virtual_camera_width` | int | `1920` | UI range `128..3840` |
-| `virtual_camera_heigth` | int | `1080` | UI range `128..2160` |
-
-### 4.2 Target
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `disable_headshot` | bool | `false` | If `true`, body targeting only |
-| `body_y_offset` | float | `0.15` | Body target Y offset |
-| `head_y_offset` | float | `0.05` | Head target Y offset |
-| `auto_aim` | bool | `false` | Automatic target lock behavior |
-
-### 4.3 Mouse (FOV, Speed, Prediction, Correction)
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `fovX` | int | `106` | UI range `10..120` |
-| `fovY` | int | `74` | UI range `10..120` |
-| `minSpeedMultiplier` | float | `0.1` | UI range `0.1..5.0` |
-| `maxSpeedMultiplier` | float | `0.1` | UI range `0.1..5.0` |
-| `predictionInterval` | float | `0.01` | UI range `0.00..0.5`; `0.00` disables prediction |
-| `prediction_futurePositions` | int | `20` | UI range `1..40` |
-| `draw_futurePositions` | bool | `true` | Draw predicted path |
-| `kalman_enabled` | bool | `true` | Enable Kalman filter for aim prediction |
-| `kalman_process_noise_position` | float | `40.0` | Clamped `0.0001..5000.0` |
-| `kalman_process_noise_velocity` | float | `1800.0` | Clamped `0.0001..50000.0` |
-| `kalman_measurement_noise` | float | `35.0` | Clamped `0.0001..5000.0` |
-| `kalman_velocity_damping` | float | `0.08` | Clamped `0.0..3.0` |
-| `kalman_max_velocity` | float | `20000.0` | Clamped `100.0..60000.0` |
-| `kalman_warmup_frames` | int | `2` | Clamped `0..20` |
-| `kalman_compensate_detection_delay` | bool | `true` | Add live inference delay to prediction horizon |
-| `kalman_additional_prediction_ms` | float | `0.0` | Clamped `-80.0..120.0` |
-| `kalman_reset_timeout_sec` | float | `0.5` | Auto reset timeout, clamped `0.05..3.0` |
-| `snapRadius` | float | `1.5` | UI range `0.1..5.0` |
-| `nearRadius` | float | `25.0` | UI range `1.0..40.0` |
-| `speedCurveExponent` | float | `3.0` | UI range `0.1..10.0` |
-| `snapBoostFactor` | float | `1.15` | UI range `0.01..4.0` |
-| `easynorecoil` | bool | `false` | Recoil compensation master switch |
-| `easynorecoilstrength` | float | `0.0` | UI range `0.1..500.0` when enabled |
-| `input_method` | string | `WIN32` | `WIN32`, `GHUB`, `ARDUINO`, `RP2350`, `KMBOX_NET`, `KMBOX_A`, `MAKCU` |
-
-### 4.4 Wind Mouse
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `wind_mouse_enabled` | bool | `false` | Enable WindMouse behavior |
-| `wind_G` | float | `18.0` | UI range `4.0..40.0` |
-| `wind_W` | float | `15.0` | UI range `1.0..40.0` |
-| `wind_M` | float | `10.0` | UI range `1.0..40.0` |
-| `wind_D` | float | `8.0` | UI range `1.0..40.0` |
-
-### 4.5 Arduino
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `arduino_baudrate` | int | `115200` | UI presets: `9600`, `19200`, `38400`, `57600`, `115200` |
-| `arduino_port` | string | `COM0` | UI COM list `COM1..COM30` |
-| `arduino_16_bit_mouse` | bool | `false` | Device-specific mode |
-| `arduino_enable_keys` | bool | `false` | Device-specific mode |
-
-### 4.6 RP2350
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `rp2350_baudrate` | int | `115200` | UI presets: `9600`, `19200`, `38400`, `57600`, `115200`, `230400`, `460800`, `921600` |
-| `rp2350_port` | string | `COM0` | UI COM list `COM1..COM30` |
-| `rp2350_16_bit_mouse` | bool | `true` | Send movement as one `mX,Y` command instead of 8-bit chunks |
-| `rp2350_enable_keys` | bool | `false` | Read device button events from serial lines `BD:<id>` / `BU:<id>` |
-
-### 4.7 KMBOX_NET
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `kmbox_net_ip` | string | `10.42.42.42` | Device IP |
-| `kmbox_net_port` | string | `1984` | Device port as string |
-| `kmbox_net_uuid` | string | `DEADC0DE` | Device UUID |
-
-### 4.8 KMBOX_A
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `kmbox_a_pidvid` | string | empty | Format `PPPPVVVV` in one field |
-
-### 4.9 MAKCU
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `makcu_baudrate` | int | `115200` | UI presets: `9600`, `19200`, `38400`, `57600`, `115200` |
-| `makcu_port` | string | `COM0` | UI COM list `COM1..COM30` |
-
-### 4.10 Mouse Shooting
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `auto_shoot` | bool | `false` | Auto fire logic |
-| `bScope_multiplier` | float | `1.0` | UI range `0.5..2.0` |
-
-### 4.11 AI
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `backend` | string | `TRT` on CUDA build, `DML` on DML build | CUDA build supports both `TRT` and `DML`; DML build uses `DML` |
-| `dml_device_id` | int | `0` | DML adapter index |
-| `ai_model` | string | `sunxds_0.5.6.engine` (CUDA) or `sunxds_0.5.6.onnx` (DML) | Model file name in `models` |
-| `confidence_threshold` | float | `0.10` | UI range `0.01..1.00` |
-| `nms_threshold` | float | `0.50` | UI range `0.00..1.00` |
-| `max_detections` | int | `100` | UI range `1..100` |
-| `export_enable_fp8` | bool | `false` | CUDA-only export option |
-| `export_enable_fp16` | bool | `true` | CUDA-only export option |
-
-### 4.12 CUDA (CUDA build only)
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `use_cuda_graph` | bool | `false` | TensorRT execution optimization |
-| `use_pinned_memory` | bool | `false` | Host pinned memory mode |
-| `gpuMemoryReserveMB` | int | `2048` | GPU reserve target |
-| `enableGpuExclusiveMode` | bool | `true` | Exclusive behavior toggle |
-| `capture_use_cuda` | bool | `true` | Direct GPU capture path for TRT + duplication API |
-
-### 4.13 System
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `cpuCoreReserveCount` | int | `4` | Reserved CPU cores |
-| `systemMemoryReserveMB` | int | `2048` | Reserved RAM amount |
-
-### 4.14 Buttons
-
-All button keys are comma-separated lists of key names.
-
-| Key | Type | Default |
-|---|---|---|
-| `button_targeting` | list | `RightMouseButton` |
-| `button_shoot` | list | `LeftMouseButton` |
-| `button_zoom` | list | `RightMouseButton` |
-| `button_exit` | list | `F2` |
-| `button_pause` | list | `F3` |
-| `button_reload_config` | list | `F4` |
-| `button_open_overlay` | list | `Home` |
-| `enable_arrows_settings` | bool | `false` |
-
-### 4.15 Overlay
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `overlay_opacity` | int | `225` | UI range `220..255` |
-| `overlay_ui_scale` | float | `1.0` | UI range `0.85..1.35` |
-| `overlay_exclude_from_capture` | bool | `true` | Hide overlay from capture/recording |
-
-### 4.16 Depth
-
-Depth features require CUDA build.
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `depth_inference_enabled` | bool | `true` | Enable depth pipeline |
-| `depth_model_path` | string | `depth_anything_v2.engine` | Depth model in `models/depth` |
-| `depth_fps` | int | `100` | Clamped to `>= 0`; UI `0..120` |
-| `depth_colormap` | int | `18` | Clamped to `0..21` |
-| `depth_mask_enabled` | bool | `false` | Enable depth-based mask |
-| `depth_mask_fps` | int | `5` | Clamped to `>= 0`; UI `1..30` |
-| `depth_mask_near_percent` | int | `20` | Clamped to `1..100` |
-| `depth_mask_alpha` | int | `90` | Clamped to `0..255` |
-| `depth_mask_invert` | bool | `false` | Invert mask side |
-| `depth_debug_overlay_enabled` | bool | `false` | Extra debug rendering |
-
-### 4.17 Game Overlay
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `game_overlay_enabled` | bool | `false` | Master toggle |
-| `game_overlay_max_fps` | int | `0` | UI `0..256`; `0` uncapped |
-| `game_overlay_draw_boxes` | bool | `true` | Draw detection boxes |
-| `game_overlay_draw_future` | bool | `true` | Draw future points |
-| `game_overlay_draw_wind_tail` | bool | `true` | Draw WindMouse tail |
-| `game_overlay_draw_frame` | bool | `true` | Draw capture frame |
-| `game_overlay_show_target_correction` | bool | `true` | Draw correction debug |
-| `game_overlay_box_a` | int | `255` | `0..255` |
-| `game_overlay_box_r` | int | `0` | `0..255` |
-| `game_overlay_box_g` | int | `255` | `0..255` |
-| `game_overlay_box_b` | int | `0` | `0..255` |
-| `game_overlay_frame_a` | int | `180` | `0..255` |
-| `game_overlay_frame_r` | int | `255` | `0..255` |
-| `game_overlay_frame_g` | int | `255` | `0..255` |
-| `game_overlay_frame_b` | int | `255` | `0..255` |
-| `game_overlay_box_thickness` | float | `2.0` | UI `0.5..10.0` |
-| `game_overlay_frame_thickness` | float | `1.5` | UI `0.5..10.0` |
-| `game_overlay_future_point_radius` | float | `5.0` | UI `1.0..20.0` |
-| `game_overlay_future_alpha_falloff` | float | `1.0` | UI `0.1..5.0` |
-| `game_overlay_icon_enabled` | bool | `false` | Enable icon overlay |
-| `game_overlay_icon_path` | string | `icon.png` | Path to icon image |
-| `game_overlay_icon_width` | int | `64` | UI `4..512` |
-| `game_overlay_icon_height` | int | `64` | UI `4..512` |
-| `game_overlay_icon_offset_x` | float | `0.0` | UI `-500..500` |
-| `game_overlay_icon_offset_y` | float | `0.0` | UI `-500..500` |
-| `game_overlay_icon_anchor` | string | `center` | `center`, `top`, `bottom`, `head` |
-| `game_overlay_icon_class` | int | `-1` | `-1` for all classes |
-
-### 4.18 Aim Simulation Overlay
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `aim_sim_enabled` | bool | `false` | Master toggle |
-| `aim_sim_x` | int | `24` | UI `-3000..3000` |
-| `aim_sim_y` | int | `24` | UI `-3000..3000` |
-| `aim_sim_width` | int | `560` | Clamped `220..1920` (UI `220..1600`) |
-| `aim_sim_height` | int | `360` | Clamped `180..1080` (UI `180..1000`) |
-| `aim_sim_fps_min` | int | `90` | Clamped `15..360` |
-| `aim_sim_fps_max` | int | `120` | Clamped `15..360` |
-| `aim_sim_fps_jitter` | float | `0.15` | Clamped `0.0..0.8` |
-| `aim_sim_capture_delay_ms` | float | `6.0` | Clamped `0.0..80.0` |
-| `aim_sim_inference_delay_ms` | float | `12.0` | Clamped `0.0..120.0` |
-| `aim_sim_use_live_inference` | bool | `true` | Use runtime inference delay |
-| `aim_sim_input_delay_ms` | float | `2.0` | Clamped `0.0..60.0` |
-| `aim_sim_extra_delay_ms` | float | `2.0` | Clamped `0.0..60.0` |
-| `aim_sim_target_max_speed` | float | `560.0` | Clamped `20.0..2500.0` |
-| `aim_sim_target_accel` | float | `1850.0` | Clamped `20.0..10000.0` |
-| `aim_sim_target_stop_chance` | float | `0.25` | Clamped `0.0..0.95` |
-| `aim_sim_show_observed` | bool | `true` | Show delayed target marker |
-| `aim_sim_show_history` | bool | `true` | Show trajectory history |
-| `aim_sim_show_kalman_debug` | bool | `true` | Draw Kalman estimate/innovation/velocity debug |
-
-### 4.19 Classes
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `class_player` | int | `0` | Must match your model class index |
-| `class_head` | int | `1` | Must match your model class index |
-
-### 4.20 Debug
-
-| Key | Type | Default | Allowed / Notes |
-|---|---|---:|---|
-| `show_window` | bool | `true` | Capture preview window in overlay |
-| `show_fps` | bool | `false` | Legacy key; currently not used in runtime logic |
-| `screenshot_button` | list | `None` | Screenshot hotkey list |
-| `screenshot_delay` | int | `500` | Minimum interval (ms) between screenshots |
-| `verbose` | bool | `false` | Verbose console logging |
-
-### 4.21 Active Game Profile
-
-| Key | Type | Default | Notes |
-|---|---|---:|---|
-| `active_game` | string | `UNIFIED` | Name of active profile from `[Games]` |
-
-Profiles are stored in a `[Games]` section.
-
-Format:
+Profiles are stored under `[Games]`:
 
 ```ini
 [Games]
-UNIFIED = 1.0,0.022,0.022,false,0.0
-MyGame = 1.2,0.022,0.022,true,103.0
+UNIFIED = 1,0.022,0.022
 ```
 
-Field order:
+Format:
 
-1. `sens`
-2. `yaw`
-3. `pitch` (optional; defaults to yaw if missing)
-4. `fovScaled` (`true`/`false`, optional)
-5. `baseFOV` (optional)
+```text
+name = sensitivity,yaw,pitch[,fovScaled,baseFOV]
+```
 
-## 5. Special Notes
+Examples:
 
-### 5.1 CUDA direct capture conditions
+```ini
+[Games]
+UNIFIED = 1,0.022,0.022
+MY_GAME = 2.5,0.02,0.02,true,90
+```
 
-`capture_use_cuda` is effective only when all are true:
-
-- CUDA build
-- `backend = TRT`
-- `capture_method = duplication_api`
-- `circle_mask = false`
-- depth mask is disabled
-
-### 5.2 Runtime-only / auto-managed fields
-
-- `fixed_input_size` exists in runtime state and is auto-detected by detector code.
-- It is not a regular persisted `config.ini` key in current implementation.
-
-### 5.3 Migration notes
-
-If you update from older config versions:
-
-- New/missing keys are auto-filled by fallback values.
-- Invalid ranges are clamped (for keys with validation in `loadConfig`).
+If `active_game` is missing or invalid, the app falls back to an available profile.

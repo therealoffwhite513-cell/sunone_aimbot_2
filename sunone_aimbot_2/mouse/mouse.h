@@ -24,6 +24,8 @@
 #include "KmboxNetConnection.h"
 #include "Makcu.h"
 #include "ghub.h"
+#include "rzctl.h"
+#include "Teensy41RawHid.h"
 #include "aim_kalman.h"
 
 class MouseThread
@@ -55,6 +57,8 @@ private:
     KmboxNetConnection* kmbox_net;
     MakcuConnection* makcu;
     GhubMouse* gHub;
+    RzctlMouse* rzctl;
+    Teensy41RawHid* teensy41RawHid;
 
     void sendMovementToDriver(int dx, int dy);
 
@@ -134,7 +138,9 @@ public:
         GhubMouse* gHubMouse = nullptr,
         KmboxAConnection* Kmbox_A_Connection = nullptr,
         KmboxNetConnection* Kmbox_Net_Connection = nullptr,
-        MakcuConnection* makcuConnection = nullptr
+        MakcuConnection* makcuConnection = nullptr,
+        RzctlMouse* rzctlMouse = nullptr,
+        Teensy41RawHid* teensy41RawHidConnection = nullptr
     );
     ~MouseThread();
 
@@ -173,6 +179,8 @@ public:
     void setKmboxNetConnection(KmboxNetConnection* newKmbox_net);
     void setMakcuConnection(MakcuConnection* newMakcu);
     void setGHubMouse(GhubMouse* newGHub);
+    void setRzctlMouse(RzctlMouse* newRzctl);
+    void setTeensy41RawHid(Teensy41RawHid* newTeensy41RawHid);
 
     void setTargetDetected(bool detected) { target_detected.store(detected); }
     void setLastTargetTime(const std::chrono::steady_clock::time_point& t) { last_target_time = t; }

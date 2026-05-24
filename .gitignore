@@ -38,6 +38,7 @@ compile_commands.json
 CMakePresets.json.user
 /build/
 cmake-build-*/
+tools/.bin/
 
 # modules
 .vs
@@ -45,6 +46,7 @@ sunone_aimbot_2/x64
 x64
 packages
 /sunone_aimbot_2/modules/opencv
+/sunone_aimbot_2/modules/_downloads
 /sunone_aimbot_2/screenshots/
 /sunone_aimbot_2/cudnn64_9.dll
 /sunone_aimbot_2/opencv_world4100.dll
@@ -60,5 +62,6 @@ packages
 /sunone_aimbot_2/modules/cudnn
 /sunone_aimbot_2/config.ini
 /sunone_aimbot_2/modules/TensorRT-10.14.1.48
+/sunone_aimbot_2/modules/TensorRT-*
 setup_opencv_dml_run.log
 setup_opencv_dml_run.log

@@ -4,6 +4,7 @@
 #include <Windows.h>
 
 #include <shellapi.h>
+#include <cstring>
 
 #include "imgui/imgui.h"
 #include <imgui_internal.h>
@@ -395,7 +396,7 @@ void draw_mouse()
 
     if (OverlayUI::BeginSection("Input Method", "mouse_section_input_method"))
     {
-        std::vector<std::string> input_methods = { "WIN32", "GHUB", "ARDUINO", "RP2350", "KMBOX_NET", "KMBOX_A", "MAKCU" };
+        std::vector<std::string> input_methods = { "WIN32", "GHUB", "RAZER", "ARDUINO", "RP2350", "TEENSY41_HID", "KMBOX_NET", "KMBOX_A", "MAKCU" };
 
         std::vector<const char*> method_items;
         method_items.reserve(input_methods.size());
@@ -616,9 +617,85 @@ void draw_mouse()
 
             ImGui::TextColored(ImVec4(255, 0, 0, 255), "Use at your own risk, the method is detected in some games.");
         }
+        else if (config.input_method == "RAZER")
+        {
+            if (rzctlMouse && rzctlMouse->isOpen())
+            {
+                ImGui::TextColored(ImVec4(0, 255, 0, 255), "Razer rzctl connected");
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(255, 0, 0, 255), "Razer rzctl not connected");
+            }
+
+            ImGui::Text("Requires chroma_lighting.dll next to ai.exe or in modules\\razer-controls\\x64\\Release.");
+        }
+        else if (config.input_method == "TEENSY41_HID")
+        {
+            if (teensy41RawHid && teensy41RawHid->isOpen())
+            {
+                ImGui::TextColored(ImVec4(0, 255, 0, 255), "Teensy 4.1 RawHID connected");
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(255, 0, 0, 255), "Teensy 4.1 RawHID not connected");
+            }
+
+            static char serial[64] = "";
+            static char vid[16] = "";
+            static char pid[16] = "";
+            static std::string last_serial;
+            static std::string last_vid;
+            static std::string last_pid;
+
+            if (last_serial != config.teensy_hid_serial ||
+                last_vid != config.teensy_hid_vid_filter ||
+                last_pid != config.teensy_hid_pid_filter)
+            {
+                strncpy(serial, config.teensy_hid_serial.c_str(), sizeof(serial));
+                strncpy(vid, config.teensy_hid_vid_filter.c_str(), sizeof(vid));
+                strncpy(pid, config.teensy_hid_pid_filter.c_str(), sizeof(pid));
+                serial[sizeof(serial) - 1] = '\0';
+                vid[sizeof(vid) - 1] = '\0';
+                pid[sizeof(pid) - 1] = '\0';
+                last_serial = config.teensy_hid_serial;
+                last_vid = config.teensy_hid_vid_filter;
+                last_pid = config.teensy_hid_pid_filter;
+            }
+
+            ImGui::InputText("Serial", serial, sizeof(serial));
+            ImGui::InputText("VID filter", vid, sizeof(vid));
+            ImGui::InputText("PID filter", pid, sizeof(pid));
+            ImGui::TextDisabled("Use AUTO to match any serial/VID/PID.");
+
+            bool hidChanged = false;
+            hidChanged |= ImGui::SliderInt("Usage Page", &config.teensy_hid_usage_page, 1, 65535);
+            hidChanged |= ImGui::SliderInt("Usage ID", &config.teensy_hid_usage_id, 1, 65535);
+            hidChanged |= ImGui::SliderInt("Open Index", &config.teensy_hid_open_index, 0, 32);
+            hidChanged |= ImGui::SliderInt("Packet Timeout (ms)", &config.teensy_hid_packet_timeout_ms, 0, 100);
+            hidChanged |= ImGui::SliderInt("Reconnect (ms)", &config.teensy_hid_reconnect_interval_ms, 50, 10000);
+
+            if (hidChanged)
+            {
+                OverlayConfig_MarkDirty();
+                input_method_changed.store(true);
+            }
+
+            if (ImGui::Button("Save & Reconnect##teensy41_hid"))
+            {
+                config.teensy_hid_serial = serial;
+                config.teensy_hid_vid_filter = vid;
+                config.teensy_hid_pid_filter = pid;
+                last_serial = config.teensy_hid_serial;
+                last_vid = config.teensy_hid_vid_filter;
+                last_pid = config.teensy_hid_pid_filter;
+                OverlayConfig_MarkDirty();
+                input_method_changed.store(true);
+            }
+        }
         else if (config.input_method == "WIN32")
         {
-            ImGui::TextColored(ImVec4(255, 255, 255, 255), "This is a standard mouse input method, it may not work in most games. Use GHUB, ARDUINO, or RP2350.");
+            ImGui::TextColored(ImVec4(255, 255, 255, 255), "This is a standard mouse input method, it may not work in most games.");
             ImGui::TextColored(ImVec4(255, 0, 0, 255), "Use at your own risk, the method is detected in some games.");
         }
         else if (config.input_method == "KMBOX_NET")

@@ -45,7 +45,13 @@ bool prevRightArrow = false;
 
 bool isAnyKeyPressed(const std::vector<std::string>& keys)
 {
-    bool usePhysicalDevice = false;
+    bool usePhysicalDevice =
+        config.input_method == "ARDUINO" ||
+        config.input_method == "RP2350" ||
+        config.input_method == "TEENSY41_HID" ||
+        config.input_method == "KMBOX_NET" ||
+        config.input_method == "KMBOX_A" ||
+        config.input_method == "MAKCU";
 
     if (makcuSerial && makcuSerial->isOpen()) {
         usePhysicalDevice = true;
@@ -57,6 +63,9 @@ bool isAnyKeyPressed(const std::vector<std::string>& keys)
         usePhysicalDevice = true;
     }
     else if (config.rp2350_enable_keys && rp2350Serial && rp2350Serial->isOpen()) {
+        usePhysicalDevice = true;
+    }
+    else if (teensy41RawHid && teensy41RawHid->isOpen()) {
         usePhysicalDevice = true;
     }
 
@@ -94,9 +103,9 @@ bool isAnyKeyPressed(const std::vector<std::string>& keys)
         // Arduino
         if (!pressed && config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen())
         {
-            if (key_name == "LeftMouseButton")       pressed = arduinoSerial->shooting_active;
-            else if (key_name == "RightMouseButton")  pressed = arduinoSerial->zooming_active;
-            else if (key_name == "X2MouseButton")     pressed = arduinoSerial->aiming_active;
+            if (key_name == "LeftMouseButton")       pressed = arduinoSerial->shooting_active.load();
+            else if (key_name == "RightMouseButton")  pressed = arduinoSerial->zooming_active.load();
+            else if (key_name == "X2MouseButton")     pressed = arduinoSerial->aiming_active.load();
         }
 
         // RP2350
@@ -105,6 +114,14 @@ bool isAnyKeyPressed(const std::vector<std::string>& keys)
             if (key_name == "LeftMouseButton")       pressed = rp2350Serial->shooting_active;
             else if (key_name == "RightMouseButton")  pressed = rp2350Serial->zooming_active;
             else if (key_name == "X2MouseButton")     pressed = rp2350Serial->aiming_active;
+        }
+
+        // Teensy 4.1 RawHID
+        if (!pressed && teensy41RawHid && teensy41RawHid->isOpen())
+        {
+            if (key_name == "LeftMouseButton")       pressed = teensy41RawHid->shootingActive();
+            else if (key_name == "RightMouseButton")  pressed = teensy41RawHid->zoomingActive();
+            else if (key_name == "X2MouseButton")     pressed = teensy41RawHid->aimingActive();
         }
 
         // Win32 API
@@ -146,8 +163,9 @@ void keyboardListener()
         if (!config.auto_aim)
         {
             aiming = isAnyKeyPressed(config.button_targeting) ||
-                (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen() && arduinoSerial->aiming_active) ||
+                (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen() && arduinoSerial->aiming_active.load()) ||
                 (config.rp2350_enable_keys && rp2350Serial && rp2350Serial->isOpen() && rp2350Serial->aiming_active) ||
+                (teensy41RawHid && teensy41RawHid->isOpen() && teensy41RawHid->aimingActive()) ||
                 (kmboxNetSerial && kmboxNetSerial->isOpen() && kmboxNetSerial->aiming_active) ||
                 (makcuSerial && makcuSerial->isOpen() && makcuSerial->aiming_active);
         }
@@ -158,15 +176,17 @@ void keyboardListener()
 
         // Shooting
         shooting = isAnyKeyPressed(config.button_shoot) ||
-            (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen() && arduinoSerial->shooting_active) ||
+            (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen() && arduinoSerial->shooting_active.load()) ||
             (config.rp2350_enable_keys && rp2350Serial && rp2350Serial->isOpen() && rp2350Serial->shooting_active) ||
+            (teensy41RawHid && teensy41RawHid->isOpen() && teensy41RawHid->shootingActive()) ||
             (kmboxNetSerial && kmboxNetSerial->isOpen() && kmboxNetSerial->shooting_active) ||
             (makcuSerial && makcuSerial->isOpen() && makcuSerial->shooting_active);
 
         // Zooming
         zooming = isAnyKeyPressed(config.button_zoom) ||
-            (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen() && arduinoSerial->zooming_active) ||
+            (config.arduino_enable_keys && arduinoSerial && arduinoSerial->isOpen() && arduinoSerial->zooming_active.load()) ||
             (config.rp2350_enable_keys && rp2350Serial && rp2350Serial->isOpen() && rp2350Serial->zooming_active) ||
+            (teensy41RawHid && teensy41RawHid->isOpen() && teensy41RawHid->zoomingActive()) ||
             (kmboxNetSerial && kmboxNetSerial->isOpen() && kmboxNetSerial->zooming_active) ||
             (makcuSerial && makcuSerial->isOpen() && makcuSerial->zooming_active);
 
