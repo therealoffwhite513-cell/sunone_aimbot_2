@@ -173,6 +173,10 @@ Assert-Contains $mouseHeader 'getMotionCompensationSince' `
     'MouseThread must expose summed movement since a capture timestamp.'
 Assert-Contains $mouseHeader 'std::chrono::steady_clock::time_point observationTime' `
     'MouseThread prediction and movement APIs must accept capture observation time.'
+Assert-Contains $mouseHeader 'void\s+detachInputDevices\(\)' `
+    'MouseThread must expose an atomic input-device detach before external teardown deletes raw device pointers.'
+Assert-Contains $mouseHeader 'bool\s+pressSelectedInput\(const std::string& inputMethod\)' `
+    'MouseThread must centralize press dispatch so mouse_pressed is updated only after a backend reports success.'
 
 $mouseSource = Read-Source 'sunone_aimbot_2/mouse/mouse.cpp'
 Assert-Contains $mouseSource 'const std::string inputMethod = config\.input_method' `
@@ -193,6 +197,16 @@ Assert-Contains $mouseSource 'MouseThread::mouseCountsToScreenPixels' `
     'Motion compensation must use the same game-profile conversion as the wind trail.'
 Assert-Contains $mouseSource 'currentDetectionDelaySec\(double observationAgeSec' `
     'Prediction delay compensation must use measured frame age when available.'
+Assert-Contains $mouseSource 'void\s+MouseThread::detachInputDevices\(\)' `
+    'MouseThread must detach raw input-device pointers under input_method_mutex before device teardown.'
+Assert-Contains $mouseSource 'mouse_pressed\.store\(false\)' `
+    'Detaching input devices must reset logical button state so auto-shoot can retry after reconnect.'
+Assert-Contains $mouseSource 'if \(pressSelectedInput\(inputMethod\)\)\s*\{\s*mouse_pressed\.store\(true\);\s*\}' `
+    'Auto-shoot must mark mouse_pressed only after the selected backend successfully presses.'
+
+$main = Read-Source 'sunone_aimbot_2/sunone_aimbot_2.cpp'
+Assert-Order $main 'globalMouseThread->detachInputDevices();' 'delete arduinoSerial;' `
+    'Input device teardown must detach MouseThread raw pointers before deleting device objects.'
 Assert-Contains $configHeader 'float\s+closeRangeTransition' `
     'Config header must expose close-range transition smoothing.'
 Assert-Contains $config 'closeRangeTransition\s*=\s*8\.0f' `

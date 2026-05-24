@@ -16,6 +16,7 @@
 #include <condition_variable>
 #include <deque>
 #include <random>
+#include <string>
 
 #include "AimbotTarget.h"
 #include "Arduino.h"
@@ -134,6 +135,8 @@ private:
     double calculate_speed_multiplier(double distance);
     double currentDetectionDelaySec(double observationAgeSec = -1.0) const;
     double currentPredictionLookaheadSec(double detectionDelaySec) const;
+    bool pressSelectedInput(const std::string& inputMethod);
+    bool releaseSelectedInput(const std::string& inputMethod);
 
 public:
     std::mutex input_method_mutex;
@@ -204,6 +207,7 @@ public:
     void setGHubMouse(GhubMouse* newGHub);
     void setRzctlMouse(RzctlMouse* newRzctl);
     void setTeensy41RawHid(Teensy41RawHid* newTeensy41RawHid);
+    void detachInputDevices();
 
     void setTargetDetected(bool detected) { target_detected.store(detected); }
     void setLastTargetTime(const std::chrono::steady_clock::time_point& t) { last_target_time = t; }

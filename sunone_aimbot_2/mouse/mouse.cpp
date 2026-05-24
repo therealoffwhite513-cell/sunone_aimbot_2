@@ -726,6 +726,130 @@ bool MouseThread::check_target_in_scope(double target_x, double target_y, double
     return (center_x > x1 && center_x < x2 && center_y > y1 && center_y < y2);
 }
 
+bool MouseThread::pressSelectedInput(const std::string& inputMethod)
+{
+    if (inputMethod == "TEENSY41_HID")
+        return teensy41RawHid && teensy41RawHid->press();
+
+    if (inputMethod == "RAZER")
+        return rzctl && rzctl->mouse_down();
+
+    if (inputMethod == "KMBOX_NET")
+    {
+        if (!kmbox_net || !kmbox_net->isOpen())
+            return false;
+        kmbox_net->leftDown();
+        return true;
+    }
+
+    if (inputMethod == "KMBOX_A")
+    {
+        if (!kmbox_a || !kmbox_a->isOpen())
+            return false;
+        kmbox_a->leftDown();
+        return true;
+    }
+
+    if (inputMethod == "MAKCU")
+    {
+        if (!makcu || !makcu->isOpen())
+            return false;
+        makcu->press(0);
+        return true;
+    }
+
+    if (inputMethod == "RP2350")
+    {
+        if (!rp2350 || !rp2350->isOpen())
+            return false;
+        rp2350->press();
+        return true;
+    }
+
+    if (inputMethod == "ARDUINO")
+    {
+        if (!arduino || !arduino->isOpen())
+            return false;
+        arduino->press();
+        return true;
+    }
+
+    if (inputMethod == "GHUB")
+        return gHub && gHub->mouse_down();
+
+    if (inputMethod == "WIN32")
+    {
+        INPUT input = { 0 };
+        input.type = INPUT_MOUSE;
+        input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+        return SendInput(1, &input, sizeof(INPUT)) == 1;
+    }
+
+    return false;
+}
+
+bool MouseThread::releaseSelectedInput(const std::string& inputMethod)
+{
+    if (inputMethod == "TEENSY41_HID")
+        return teensy41RawHid && teensy41RawHid->release();
+
+    if (inputMethod == "RAZER")
+        return rzctl && rzctl->mouse_up();
+
+    if (inputMethod == "KMBOX_NET")
+    {
+        if (!kmbox_net || !kmbox_net->isOpen())
+            return false;
+        kmbox_net->leftUp();
+        return true;
+    }
+
+    if (inputMethod == "KMBOX_A")
+    {
+        if (!kmbox_a || !kmbox_a->isOpen())
+            return false;
+        kmbox_a->leftUp();
+        return true;
+    }
+
+    if (inputMethod == "MAKCU")
+    {
+        if (!makcu || !makcu->isOpen())
+            return false;
+        makcu->release(0);
+        return true;
+    }
+
+    if (inputMethod == "RP2350")
+    {
+        if (!rp2350 || !rp2350->isOpen())
+            return false;
+        rp2350->release();
+        return true;
+    }
+
+    if (inputMethod == "ARDUINO")
+    {
+        if (!arduino || !arduino->isOpen())
+            return false;
+        arduino->release();
+        return true;
+    }
+
+    if (inputMethod == "GHUB")
+        return gHub && gHub->mouse_up();
+
+    if (inputMethod == "WIN32")
+    {
+        INPUT input = { 0 };
+        input.type = INPUT_MOUSE;
+        input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+        return SendInput(1, &input, sizeof(INPUT)) == 1;
+    }
+
+    return false;
+}
+
 void MouseThread::moveMouse(const AimbotTarget& target)
 {
     std::lock_guard lg(input_method_mutex);
@@ -793,106 +917,16 @@ void MouseThread::pressMouse(const AimbotTarget& target)
     if (bScope && !mouse_pressed)
     {
         const std::string inputMethod = config.input_method;
-        if (inputMethod == "TEENSY41_HID")
+        if (pressSelectedInput(inputMethod))
         {
-            if (teensy41RawHid)
-                teensy41RawHid->press();
+            mouse_pressed.store(true);
         }
-        else if (inputMethod == "RAZER")
-        {
-            if (rzctl)
-                rzctl->mouse_down();
-        }
-        else if (inputMethod == "KMBOX_NET")
-        {
-            if (kmbox_net)
-                kmbox_net->leftDown();
-        }
-        else if (inputMethod == "KMBOX_A")
-        {
-            if (kmbox_a)
-                kmbox_a->leftDown();
-        }
-        else if (inputMethod == "MAKCU")
-        {
-            if (makcu)
-                makcu->press(0);
-        }
-        else if (inputMethod == "RP2350")
-        {
-            if (rp2350)
-                rp2350->press();
-        }
-        else if (inputMethod == "ARDUINO")
-        {
-            if (arduino)
-                arduino->press();
-        }
-        else if (inputMethod == "GHUB")
-        {
-            if (gHub)
-                gHub->mouse_down();
-        }
-        else if (inputMethod == "WIN32")
-        {
-            INPUT input = { 0 };
-            input.type = INPUT_MOUSE;
-            input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-            SendInput(1, &input, sizeof(INPUT));
-        }
-        mouse_pressed = true;
     }
     else if (!bScope && mouse_pressed)
     {
         const std::string inputMethod = config.input_method;
-        if (inputMethod == "TEENSY41_HID")
-        {
-            if (teensy41RawHid)
-                teensy41RawHid->release();
-        }
-        else if (inputMethod == "RAZER")
-        {
-            if (rzctl)
-                rzctl->mouse_up();
-        }
-        else if (inputMethod == "KMBOX_NET")
-        {
-            if (kmbox_net)
-                kmbox_net->leftUp();
-        }
-        else if (inputMethod == "KMBOX_A")
-        {
-            if (kmbox_a)
-                kmbox_a->leftUp();
-        }
-        else if (inputMethod == "MAKCU")
-        {
-            if (makcu)
-                makcu->release(0);
-        }
-        else if (inputMethod == "RP2350")
-        {
-            if (rp2350)
-                rp2350->release();
-        }
-        else if (inputMethod == "ARDUINO")
-        {
-            if (arduino)
-                arduino->release();
-        }
-        else if (inputMethod == "GHUB")
-        {
-            if (gHub)
-                gHub->mouse_up();
-        }
-        else if (inputMethod == "WIN32")
-        {
-            INPUT input = { 0 };
-            input.type = INPUT_MOUSE;
-            input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
-            SendInput(1, &input, sizeof(INPUT));
-        }
-        mouse_pressed = false;
+        releaseSelectedInput(inputMethod);
+        mouse_pressed.store(false);
     }
 }
 
@@ -903,54 +937,8 @@ void MouseThread::releaseMouse()
     if (mouse_pressed)
     {
         const std::string inputMethod = config.input_method;
-        if (inputMethod == "TEENSY41_HID")
-        {
-            if (teensy41RawHid)
-                teensy41RawHid->release();
-        }
-        else if (inputMethod == "RAZER")
-        {
-            if (rzctl)
-                rzctl->mouse_up();
-        }
-        else if (inputMethod == "KMBOX_NET")
-        {
-            if (kmbox_net)
-                kmbox_net->leftUp();
-        }
-        else if (inputMethod == "KMBOX_A")
-        {
-            if (kmbox_a)
-                kmbox_a->leftUp();
-        }
-        else if (inputMethod == "MAKCU")
-        {
-            if (makcu)
-                makcu->release(0);
-        }
-        else if (inputMethod == "RP2350")
-        {
-            if (rp2350)
-                rp2350->release();
-        }
-        else if (inputMethod == "ARDUINO")
-        {
-            if (arduino)
-                arduino->release();
-        }
-        else if (inputMethod == "GHUB")
-        {
-            if (gHub)
-                gHub->mouse_up();
-        }
-        else if (inputMethod == "WIN32")
-        {
-            INPUT input = { 0 };
-            input.type = INPUT_MOUSE;
-            input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
-            SendInput(1, &input, sizeof(INPUT));
-        }
-        mouse_pressed = false;
+        releaseSelectedInput(inputMethod);
+        mouse_pressed.store(false);
     }
 }
 
@@ -1119,4 +1107,22 @@ void MouseThread::setTeensy41RawHid(Teensy41RawHid* newTeensy41RawHid)
 {
     std::lock_guard<std::mutex> lock(input_method_mutex);
     teensy41RawHid = newTeensy41RawHid;
+}
+
+void MouseThread::detachInputDevices()
+{
+    {
+        std::lock_guard<std::mutex> lock(input_method_mutex);
+        arduino = nullptr;
+        rp2350 = nullptr;
+        kmbox_a = nullptr;
+        kmbox_net = nullptr;
+        makcu = nullptr;
+        gHub = nullptr;
+        rzctl = nullptr;
+        teensy41RawHid = nullptr;
+        mouse_pressed.store(false);
+    }
+
+    clearQueuedMoves();
 }

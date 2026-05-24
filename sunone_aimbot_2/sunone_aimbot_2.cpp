@@ -152,6 +152,11 @@ static std::thread StartThreadGuarded(const char* name, Func func)
 
 void createInputDevices()
 {
+    if (globalMouseThread)
+    {
+        globalMouseThread->detachInputDevices();
+    }
+
     if (arduinoSerial)
     {
         delete arduinoSerial;

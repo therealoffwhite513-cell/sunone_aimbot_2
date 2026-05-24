@@ -45,6 +45,68 @@ Why this matters:
 - The implementation does not reintroduce input fallbacks and does not drop
   detector confidence values needed by the neural tracker.
 
+### Close-Range Movement Transition Smoothing
+
+Added a smoothing layer around the close-range movement boundaries used by the
+mouse movement speed multiplier.
+
+The previous behavior had hard transitions at the close target ranges. When a
+moving target crossed those boundaries faster than cursor convergence could
+catch up, the movement logic could repeatedly switch between close-range and
+farther-range scaling. That could show up as jitter or inconsistent movement
+near the edge of the close range.
+
+Implemented behavior:
+
+- Added `closeRangeTransition` to config, save/load, docs, and regression
+  checks.
+- Default transition radius is `8.0` pixels.
+- The value is clamped to `0.0..80.0`.
+- The Mouse tab now exposes the setting as `Close Transition` in the Target
+  correction section.
+- `MouseThread::calculate_speed_multiplier()` now blends across the snap and
+  near-range boundaries with `smoothstep()` instead of switching instantly.
+- Setting `closeRangeTransition = 0` restores the old hard-boundary behavior.
+
+Why this matters:
+
+- Fast lateral target movement near the close-range edge no longer causes the
+  speed multiplier to flip abruptly between zones.
+- Manual testing can tune the transition width without changing the existing
+  snap radius, near radius, speed curve exponent, or snap boost settings.
+- The change is limited to movement scaling; it does not alter capture,
+  detection, target selection, or physical input routing.
+
+### Input Device Switch Safety
+
+Fixed two input-routing issues found during review.
+
+Implemented behavior:
+
+- `createInputDevices()` now asks `MouseThread` to detach all raw device
+  pointers before deleting old input-device objects.
+- `MouseThread::detachInputDevices()` clears the Arduino, RP2350, kmbox,
+  MAKCU, GHub, Razer, and Teensy RawHID pointers under
+  `input_method_mutex`.
+- Detach also resets the logical mouse pressed state and clears queued movement
+  after the unsafe pointers have been nulled.
+- Auto-shoot press handling now marks `mouse_pressed=true` only after the
+  selected backend successfully sends or accepts the press command.
+- Press/release dispatch is centralized in `pressSelectedInput()` and
+  `releaseSelectedInput()` so unavailable selected devices do not silently
+  advance logical button state.
+- Regression checks now protect the detach-before-delete ordering and the
+  successful-press-only state update.
+
+Why this matters:
+
+- Switching `input_method` while movement is queued can no longer leave the
+  move worker with a pointer to an object that has already been deleted.
+- Failed or disconnected selected press backends no longer make auto-shoot think
+  the mouse is already held down, so it can retry when the backend becomes
+  available.
+- The fix preserves the explicit no-fallback input routing model.
+
 ### Circle Mask Change
 
 The old `circle_mask` setting was a pixel-level frame mask. When it was enabled,
