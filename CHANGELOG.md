@@ -9,6 +9,42 @@ edited.
 
 ## Unreleased - Current Source
 
+### Frame-Age / Motion Latency Compensation
+
+This project copy is ahead of the upstream SunOner latency-compensation commit,
+so the idea was adapted instead of cherry-picked. The current source preserves
+the newer confidence-aware detection buffer, neural tracker metadata,
+Razer/Teensy control methods, and explicit no-fallback input routing.
+
+Implemented behavior:
+
+- Capture now records a frame timestamp immediately after a successful GPU or
+  CPU capture, before CPU preprocessing, masking, depth work, or detector
+  submission.
+- DML and TensorRT detector queues carry that timestamp through inference.
+- `DetectionBuffer` now publishes boxes, classes, confidences, frame timestamp,
+  and publish timestamp through one shared `set` path.
+- Detection clear paths now use `DetectionBuffer::clear()`, which clears boxes,
+  classes, confidences, and timestamps together.
+- `MultiTargetTracker` accepts an observation timestamp, so velocity and missed
+  frame prediction are based on when the frame was captured.
+- `MouseThread` records successful submitted mouse movement in screen-pixel
+  terms, using the active game profile conversion.
+- Aim movement subtracts mouse/camera movement that occurred after the source
+  frame was captured.
+- The game overlay can compensate boxes/icons using frame age, track velocity,
+  and recorded mouse movement.
+- Added `game_overlay_compensate_latency` to config, save/load, GUI, and docs.
+
+Why this matters:
+
+- Aim prediction and overlay drawing are no longer forced to treat old capture
+  observations as if they happened at the current wall-clock moment.
+- Overlay boxes and icons stay closer to the live view when capture/inference
+  latency or user movement creates visible drift.
+- The implementation does not reintroduce input fallbacks and does not drop
+  detector confidence values needed by the neural tracker.
+
 ### Circle Mask Change
 
 The old `circle_mask` setting was a pixel-level frame mask. When it was enabled,
