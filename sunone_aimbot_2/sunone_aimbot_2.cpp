@@ -159,36 +159,53 @@ void createInputDevices()
     if (globalMouseThread)
         globalMouseThread->setMouseInput(nullptr);
 
+    std::unique_ptr<IMouseInput> oldMouseInputOwner;
+    {
+        std::lock_guard<std::mutex> deviceLock(inputDevicesMutex);
+        oldMouseInputOwner = std::move(activeMouseInputOwner);
+        arduinoSerial = nullptr;
+        rp2350Serial = nullptr;
+        gHub = nullptr;
+        razerControl = nullptr;
+        kmboxNetSerial = nullptr;
+        kmboxASerial = nullptr;
+        makcuSerial = nullptr;
+    }
+    oldMouseInputOwner.reset();
+
     Config cfgSnapshot;
     {
         std::lock_guard<std::mutex> cfgLock(configMutex);
         cfgSnapshot = config;
     }
 
-    std::lock_guard<std::mutex> deviceLock(inputDevicesMutex);
+    auto newMouseInputOwner = CreateMouseInputDevice(cfgSnapshot);
+    IMouseInput* newMouseInput = newMouseInputOwner.get();
 
-    activeMouseInputOwner.reset();
-    arduinoSerial = nullptr;
-    rp2350Serial = nullptr;
-    gHub = nullptr;
-    razerControl = nullptr;
-    kmboxNetSerial = nullptr;
-    kmboxASerial = nullptr;
-    makcuSerial = nullptr;
+    Arduino* newArduinoSerial = newMouseInput ? newMouseInput->arduino() : nullptr;
+    RP2350* newRp2350Serial = newMouseInput ? newMouseInput->rp2350() : nullptr;
+    GhubMouse* newGHub = newMouseInput ? newMouseInput->ghub() : nullptr;
+    RzctlMouse* newRazerControl = newMouseInput ? newMouseInput->razer() : nullptr;
+    KmboxNetConnection* newKmboxNetSerial = newMouseInput ? newMouseInput->kmboxNet() : nullptr;
+    KmboxAConnection* newKmboxASerial = newMouseInput ? newMouseInput->kmboxA() : nullptr;
+    MakcuConnection* newMakcuSerial = newMouseInput ? newMouseInput->makcu() : nullptr;
 
-    activeMouseInputOwner = CreateMouseInputDevice(cfgSnapshot);
-
-    arduinoSerial = activeMouseInputOwner->arduino();
-    rp2350Serial = activeMouseInputOwner->rp2350();
-    gHub = activeMouseInputOwner->ghub();
-    razerControl = activeMouseInputOwner->razer();
-    kmboxNetSerial = activeMouseInputOwner->kmboxNet();
-    kmboxASerial = activeMouseInputOwner->kmboxA();
-    makcuSerial = activeMouseInputOwner->makcu();
-
-    std::string message = std::string("[Mouse] Using ") + activeMouseInputOwner->name() + " input.";
-    if (!activeMouseInputOwner->isOpen())
+    std::string message = std::string("[Mouse] Using ") + (newMouseInput ? newMouseInput->name() : "unknown") + " input.";
+    if (!newMouseInput || !newMouseInput->isOpen())
         message += " Device not connected; input disabled until the selected method is available.";
+
+    {
+        std::lock_guard<std::mutex> deviceLock(inputDevicesMutex);
+        activeMouseInputOwner = std::move(newMouseInputOwner);
+        arduinoSerial = newArduinoSerial;
+        rp2350Serial = newRp2350Serial;
+        gHub = newGHub;
+        razerControl = newRazerControl;
+        kmboxNetSerial = newKmboxNetSerial;
+        kmboxASerial = newKmboxASerial;
+        makcuSerial = newMakcuSerial;
+    }
+
     std::cout << message << std::endl;
 }
 

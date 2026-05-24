@@ -738,7 +738,17 @@ void draw_mouse()
                 input_method_changed.store(true);
             }
 
-            if (kmboxNetSerial && kmboxNetSerial->isOpen())
+            bool kmboxNetConnected = false;
+            {
+                std::lock_guard<std::mutex> lock(inputDevicesMutex);
+                KmboxNetConnection* device =
+                    activeMouseInputOwner && std::string(activeMouseInputOwner->name()) == "KMBOX_NET"
+                    ? activeMouseInputOwner->kmboxNet()
+                    : nullptr;
+                kmboxNetConnected = device && device->isOpen();
+            }
+
+            if (kmboxNetConnected)
             {
                 ImGui::TextColored(ImVec4(0, 255, 0, 255), "kmboxNet connected");
             }
@@ -747,22 +757,36 @@ void draw_mouse()
                 ImGui::TextColored(ImVec4(255, 0, 0, 255), "kmboxNet not connected");
             }
 
+            if (!kmboxNetConnected)
+                ImGui::BeginDisabled();
+
             if (ImGui::Button("Reboot box"))
             {
-                if (kmboxNetSerial)
-                {
-                    kmboxNetSerial->reboot();
-                }
+                std::lock_guard<std::mutex> lock(inputDevicesMutex);
+                KmboxNetConnection* device =
+                    activeMouseInputOwner && std::string(activeMouseInputOwner->name()) == "KMBOX_NET"
+                    ? activeMouseInputOwner->kmboxNet()
+                    : nullptr;
+                if (device && device->isOpen())
+                    device->reboot();
             }
 
             if (ImGui::Button("Change Kmbox image"))
             {
-                if (kmboxNetSerial)
+                std::lock_guard<std::mutex> lock(inputDevicesMutex);
+                KmboxNetConnection* device =
+                    activeMouseInputOwner && std::string(activeMouseInputOwner->name()) == "KMBOX_NET"
+                    ? activeMouseInputOwner->kmboxNet()
+                    : nullptr;
+                if (device && device->isOpen())
                 {
-                    kmboxNetSerial->lcdColor(0);
-                    kmboxNetSerial->lcdPicture(gImage_128x160);
+                    device->lcdColor(0);
+                    device->lcdPicture(gImage_128x160);
                 }
             }
+
+            if (!kmboxNetConnected)
+                ImGui::EndDisabled();
         }
         else if (config.input_method == "KMBOX_A")
         {

@@ -8,7 +8,10 @@
 
 #include "MouseInput.h"
 
+#include <atomic>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 #include "Arduino.h"
 #include "KmboxAConnection.h"
@@ -310,59 +313,114 @@ class KmboxNetMouseInput final : public IMouseInput
 {
 public:
     KmboxNetMouseInput(const std::string& ip, const std::string& port, const std::string& uuid)
-        : device_(std::make_unique<KmboxNetConnection>(ip, port, uuid))
+        : state_(std::make_shared<State>())
     {
+        state_->connecting.store(true);
+        std::thread([state = state_, ip, port, uuid] {
+            auto device = std::make_unique<KmboxNetConnection>(ip, port, uuid);
+            {
+                std::lock_guard<std::mutex> lock(state->mutex);
+                state->device = std::move(device);
+            }
+            state->connecting.store(false);
+            }).detach();
+    }
+
+    ~KmboxNetMouseInput() override
+    {
+        if (!state_)
+            return;
+
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        state_->device.reset();
+        state_->connecting.store(false);
     }
 
     const char* name() const override { return "KMBOX_NET"; }
-    bool isOpen() const override { return device_ && device_->isOpen(); }
+    bool isOpen() const override
+    {
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        return state_->device && state_->device->isOpen();
+    }
     bool move(int dx, int dy) override
     {
-        if (!isOpen())
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        if (!state_->device || !state_->device->isOpen())
             return false;
-        device_->move(dx, dy);
+        state_->device->move(dx, dy);
         return true;
     }
     bool leftDown() override
     {
-        if (!isOpen())
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        if (!state_->device || !state_->device->isOpen())
             return false;
-        device_->leftDown();
+        state_->device->leftDown();
         return true;
     }
     bool leftUp() override
     {
-        if (!isOpen())
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        if (!state_->device || !state_->device->isOpen())
             return false;
-        device_->leftUp();
+        state_->device->leftUp();
         return true;
     }
     bool hasPhysicalButtonState() const override { return true; }
     bool keyPressed(const std::string& keyName) override
     {
-        if (!isOpen())
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        KmboxNetConnection* device = state_->device.get();
+        if (!device || !device->isOpen())
             return false;
 
-        if (keyName == "LeftMouseButton" && device_->monitorMouseLeft() == 1)
+        if (keyName == "LeftMouseButton" && device->monitorMouseLeft() == 1)
             return true;
-        if (keyName == "RightMouseButton" && device_->monitorMouseRight() == 1)
+        if (keyName == "RightMouseButton" && device->monitorMouseRight() == 1)
             return true;
-        if (keyName == "MiddleMouseButton" && device_->monitorMouseMiddle() == 1)
+        if (keyName == "MiddleMouseButton" && device->monitorMouseMiddle() == 1)
             return true;
-        if (keyName == "X1MouseButton" && device_->monitorMouseSide1() == 1)
+        if (keyName == "X1MouseButton" && device->monitorMouseSide1() == 1)
             return true;
-        if (keyName == "X2MouseButton" && device_->monitorMouseSide2() == 1)
+        if (keyName == "X2MouseButton" && device->monitorMouseSide2() == 1)
             return true;
 
-        return logicalButtonPressed(keyName, shootingActive(), zoomingActive(), aimingActive());
+        return logicalButtonPressed(
+            keyName,
+            device->shooting_active.load(),
+            device->zooming_active.load(),
+            device->aiming_active.load());
     }
-    bool aimingActive() const override { return device_ && device_->aiming_active.load(); }
-    bool shootingActive() const override { return device_ && device_->shooting_active.load(); }
-    bool zoomingActive() const override { return device_ && device_->zooming_active.load(); }
-    KmboxNetConnection* kmboxNet() override { return device_.get(); }
+    bool aimingActive() const override
+    {
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        return state_->device && state_->device->aiming_active.load();
+    }
+    bool shootingActive() const override
+    {
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        return state_->device && state_->device->shooting_active.load();
+    }
+    bool zoomingActive() const override
+    {
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        return state_->device && state_->device->zooming_active.load();
+    }
+    KmboxNetConnection* kmboxNet() override
+    {
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        return state_->device.get();
+    }
 
 private:
-    std::unique_ptr<KmboxNetConnection> device_;
+    struct State
+    {
+        mutable std::mutex mutex;
+        std::unique_ptr<KmboxNetConnection> device;
+        std::atomic<bool> connecting{ false };
+    };
+
+    std::shared_ptr<State> state_;
 };
 
 class KmboxAMouseInput final : public IMouseInput

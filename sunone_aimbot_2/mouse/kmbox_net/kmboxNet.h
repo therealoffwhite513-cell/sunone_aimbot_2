@@ -100,6 +100,7 @@ mac  : MAC address of the box (displayed on the screen)
 Return value: 0 if connection is successful, see error codes for other values
 */
 int kmNet_init(char* ip, char* port, char* mac); // ok
+void kmNet_close();
 int kmNet_mouse_move(short x, short y);          // ok
 int kmNet_mouse_left(int isdown);                // ok
 int kmNet_mouse_right(int isdown);               // ok
