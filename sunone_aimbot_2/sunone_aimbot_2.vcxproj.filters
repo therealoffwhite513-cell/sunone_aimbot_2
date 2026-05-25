@@ -40,7 +40,6 @@
     <ClCompile Include="overlay\draw_neural.cpp" />
     <ClCompile Include="detector\dml_detector.cpp" />
     <ClCompile Include="overlay\draw_stats.cpp" />
-    <ClCompile Include="capture\capture_utils.cpp" />
     <ClCompile Include="detector\detection_buffer.cpp" />
     <ClCompile Include="mouse\kmbox_net\kmboxNet.cpp" />
     <ClCompile Include="mouse\kmboxNetConnection.cpp" />
@@ -108,7 +107,6 @@
     <ClInclude Include="runtime\thread_loops.h" />
     <ClInclude Include="detector\dml_detector.h" />
     <ClInclude Include="tensorrt\trt_monitor.h" />
-    <ClInclude Include="capture\capture_utils.h" />
     <ClInclude Include="detector\detection_buffer.h" />
     <ClInclude Include="mouse\kmbox_net\HidTable.h" />
     <ClInclude Include="mouse\kmbox_net\kmboxNet.h" />

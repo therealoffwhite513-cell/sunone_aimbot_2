@@ -38,10 +38,9 @@ Use TensorRT engine models:
 backend = TRT
 ai_model = sunxds_0.5.6.engine
 capture_use_cuda = true
-circle_mask = false
 ```
 
-Circle FOV can remain enabled. The old `circle_mask` should normally stay off.
+Circle FOV can remain enabled for circular target filtering.
 
 ## Capture
 
@@ -55,7 +54,6 @@ Circle FOV can remain enabled. The old `circle_mask` should normally stay off.
 | `detection_resolution` | `320` | Square inference/capture processing size. Higher can improve detail but costs performance. |
 | `capture_fps` | `60` | Requested capture rate. |
 | `monitor_idx` | `0` | Monitor index for monitor capture. |
-| `circle_mask` | `false` | Legacy CPU pixel mask. Keep this off unless specifically testing it. |
 | `circle_fov_enabled` | `true` | Enables the current circular FOV limiter. |
 | `circle_fov_radius_percent` | `100` | Circle FOV radius as a percent of the processed capture area. Clamped to `1..100`. |
 | `circle_fov_show_preview` | `true` | Shows Circle FOV in the GUI preview when available. |
@@ -65,11 +63,9 @@ Circle FOV can remain enabled. The old `circle_mask` should normally stay off.
 | `virtual_camera_width` | `1920` | Requested virtual camera width. |
 | `virtual_camera_heigth` | `1080` | Requested virtual camera height. The key is currently spelled `heigth` in the config for compatibility. |
 
-### Circle FOV vs Legacy Circle Mask
+### Circle FOV
 
 Use `circle_fov_enabled` for normal circular aim limiting and overlay visualization.
-
-`circle_mask` is the older pixel mask. It can force extra CPU work and can prevent the fastest CUDA capture behavior. Existing configs that only had `circle_mask = true` are migrated so Circle FOV becomes enabled and the legacy mask is turned off.
 
 ## Targeting
 

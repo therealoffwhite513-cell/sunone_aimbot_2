@@ -7,7 +7,7 @@ param(
     [string]$OpenCvContribDir = "",
     [string]$OpenCvBuildDir = "",
     [string]$InstallPrefix = "",
-    [string]$Generator = "Ninja Multi-Config",
+    [string]$Generator = "Ninja",
     [string]$NinjaPath = "",
     [string]$Architecture = "x64",
     [ValidateSet("Release", "RelWithDebInfo", "MinSizeRel", "Debug")]
@@ -294,12 +294,12 @@ try {
     $OpenCvContribDir = Resolve-NormalizedPath $OpenCvContribDir
 
     if ([string]::IsNullOrWhiteSpace($OpenCvBuildDir)) {
-        $OpenCvBuildDir = Join-Path $RepoRoot "sunone_aimbot_2\modules\opencv\build\cuda"
+        $OpenCvBuildDir = Join-Path $RepoRoot "build\ocv-cuda"
     }
     $OpenCvBuildDir = Resolve-NormalizedPath $OpenCvBuildDir
 
     if ([string]::IsNullOrWhiteSpace($InstallPrefix)) {
-        $InstallPrefix = Join-Path $OpenCvBuildDir "install"
+        $InstallPrefix = Join-Path $RepoRoot "sunone_aimbot_2\modules\opencv\build\cuda\install"
     }
     $InstallPrefix = Resolve-NormalizedPath $InstallPrefix
 
@@ -315,6 +315,7 @@ try {
         $runConfigure = $false
     }
     $runInstall = $runBuild -and (-not $NoInstall)
+    $isMultiConfigGenerator = $Generator -match "Multi-Config"
     $parallelArgs = @("--parallel")
     if ($MaxCpuCount -gt 0) {
         $parallelArgs += $MaxCpuCount.ToString()
@@ -412,6 +413,7 @@ try {
         "-B", (ConvertTo-CMakePath $OpenCvBuildDir),
         "-G", $Generator,
         "-DCMAKE_INSTALL_PREFIX=$(ConvertTo-CMakePath $InstallPrefix)",
+        "-DCMAKE_SUPPRESS_REGENERATION=ON",
         "-DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler",
         "-DCUDA_NVCC_FLAGS=--allow-unsupported-compiler",
         "-DOPENCV_EXTRA_MODULES_PATH=$(ConvertTo-CMakePath (Join-Path $OpenCvContribDir 'modules'))",
@@ -427,6 +429,9 @@ try {
         "-DBUILD_EXAMPLES=OFF",
         "-DCUDA_ARCH_BIN=$CudaArchBin"
     )
+    if (-not $isMultiConfigGenerator) {
+        $cmakeConfigureArgs += "-DCMAKE_BUILD_TYPE=$Configuration"
+    }
     if (-not [string]::IsNullOrWhiteSpace($NinjaPath)) {
         $cmakeConfigureArgs += "-DCMAKE_MAKE_PROGRAM=$(ConvertTo-CMakePath $NinjaPath)"
     }
@@ -462,9 +467,15 @@ try {
         Write-Step "Building all ($Configuration)..."
         $cmakeBuildAllArgs = @(
             "--build", (ConvertTo-CMakePath $OpenCvBuildDir),
-            "--config", $Configuration,
             "--target", "all"
         )
+        if ($isMultiConfigGenerator) {
+            $cmakeBuildAllArgs = @(
+                "--build", (ConvertTo-CMakePath $OpenCvBuildDir),
+                "--config", $Configuration,
+                "--target", "all"
+            )
+        }
         $cmakeBuildAllArgs += $parallelArgs
         Invoke-External "cmake" $cmakeBuildAllArgs
     }
@@ -473,9 +484,15 @@ try {
         Write-Step "Building install ($Configuration)..."
         $cmakeBuildInstallArgs = @(
             "--build", (ConvertTo-CMakePath $OpenCvBuildDir),
-            "--config", $Configuration,
             "--target", "install"
         )
+        if ($isMultiConfigGenerator) {
+            $cmakeBuildInstallArgs = @(
+                "--build", (ConvertTo-CMakePath $OpenCvBuildDir),
+                "--config", $Configuration,
+                "--target", "install"
+            )
+        }
         $cmakeBuildInstallArgs += $parallelArgs
         Invoke-External "cmake" $cmakeBuildInstallArgs
     }

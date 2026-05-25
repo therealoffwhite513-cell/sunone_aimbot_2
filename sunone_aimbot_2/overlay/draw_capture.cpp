@@ -111,11 +111,6 @@ void draw_capture_settings()
             }
         }
 
-        if (ImGui::Checkbox("Legacy Pixel Circle Mask (CPU)", &config.circle_mask))
-        {
-            OverlayConfig_MarkDirty();
-        }
-
 #ifdef USE_CUDA
         if (config.backend == "TRT")
         {

@@ -166,7 +166,9 @@ function Import-VisualStudioEnvironment {
         [string]$HostArchitecture = 'x64'
     )
 
-    if (Get-CommandPath 'cl.exe') {
+    $requiredTools = @('cl.exe', 'link.exe', 'rc.exe', 'mt.exe')
+    $missingTools = @($requiredTools | Where-Object { -not (Get-CommandPath $_) })
+    if ($missingTools.Count -eq 0) {
         return
     }
 
@@ -182,6 +184,11 @@ function Import-VisualStudioEnvironment {
         if ($line -match '^([^=]+)=(.*)$') {
             [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
         }
+    }
+
+    $missingTools = @($requiredTools | Where-Object { -not (Get-CommandPath $_) })
+    if ($missingTools.Count -gt 0) {
+        throw "Visual Studio environment is incomplete. Missing: $($missingTools -join ', '). Install the Windows SDK and Desktop development with C++ workload."
     }
 }
 

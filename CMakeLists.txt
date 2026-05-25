@@ -198,7 +198,6 @@ set(SRC_DIR "${CMAKE_SOURCE_DIR}/sunone_aimbot_2")
 
 set(AIMBOT_SOURCES
     "${SRC_DIR}/capture/capture.cpp"
-    "${SRC_DIR}/capture/capture_utils.cpp"
     "${SRC_DIR}/capture/duplication_api_capture.cpp"
     "${SRC_DIR}/capture/udp_capture.cpp"
     "${SRC_DIR}/capture/virtual_camera.cpp"

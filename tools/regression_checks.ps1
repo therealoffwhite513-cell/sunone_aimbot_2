@@ -40,10 +40,11 @@ Assert-Order $config 'std::defaultfloat << std::setprecision(6)' 'file << "[Game
     'Config saves must restore floating precision before writing game profiles.'
 Assert-Contains $config 'show_fps\s*=\s*get_bool\("show_fps",\s*false\)' `
     'Config load must read show_fps before save can preserve it.'
-Assert-Contains $config 'circle_mask\s*=\s*hasCircleFovSetting\s*\?\s*legacyCircleMask\s*:\s*false' `
-    'Legacy pixel circle masks must migrate to the lightweight circle FOV instead of forcing CPU capture.'
+$removedCircleMaskKeyPattern = 'circle' + '_mask'
+Assert-NotContains $config $removedCircleMaskKeyPattern `
+    'Removed legacy circular limiter config key must not be reintroduced.'
 Assert-Contains $config 'circle_fov_radius_percent\s*=\s*get_long\("circle_fov_radius_percent",\s*100\)' `
-    'Circle FOV radius must be configurable and default to the old full mask size.'
+    'Circle FOV radius must be configurable and default to the full capture area.'
 Assert-Contains $configHeader 'bool\s+game_overlay_compensate_latency' `
     'Config header must expose game overlay latency compensation.'
 Assert-Contains $config 'game_overlay_compensate_latency\s*=\s*true' `
@@ -75,13 +76,13 @@ Assert-Contains $trt 'launch_hwc_to_chw_norm' `
 Assert-NotContains $trt 'frame\.download\(cpuDownloadedFrame\);' `
     'TRT GPU-frame preprocessing must not force a GPU-to-CPU download in the fast path.'
 Assert-Contains $trt 'filterDetectionsByCircleFov\(detections\)' `
-    'TRT detections must support lightweight circle FOV filtering without pixel masking.'
+    'TRT detections must support lightweight circle FOV filtering.'
 Assert-Contains (Read-Source 'CMakeLists.txt') 'detector/cuda_preprocess\.cu' `
     'CUDA CMake target must compile cuda_preprocess.cu for the TRT GPU preprocess kernel.'
 
 $dml = Read-Source 'sunone_aimbot_2/detector/dml_detector.cpp'
 Assert-Contains $dml 'filterDetectionsByCircleFov\(filteredDetections\)' `
-    'DML detections must support lightweight circle FOV filtering without pixel masking.'
+    'DML detections must support lightweight circle FOV filtering.'
 
 $ddaHeader = Read-Source 'sunone_aimbot_2/capture/duplication_api_capture.h'
 Assert-Contains $ddaHeader 'bool\s+isInitialized\(\)\s+const' `
@@ -111,7 +112,7 @@ Assert-Contains $capture 'trt_detector\.processFrame\(detectionFrame,\s*screensh
 
 $circleFov = Read-Source 'sunone_aimbot_2/capture/circle_fov.h'
 Assert-Contains $circleFov 'pointInsideCircleFov' `
-    'Circle FOV helper must use point math instead of per-frame pixel masking.'
+    'Circle FOV helper must use point math.'
 
 $kmbox = Read-Source 'sunone_aimbot_2/mouse/kmbox_net/kmboxNet.cpp'
 Assert-Contains $kmbox 'SO_RCVTIMEO' `
@@ -490,6 +491,8 @@ Assert-Contains $buildCommon '\[void\]\(Read-Host "Download the listed files' `
     'Guided dependency downloads must not leak Read-Host input into pipeline output.'
 Assert-Contains $buildCommon 'VsDevCmd\.bat' `
     'Build automation must bootstrap the Visual Studio developer environment.'
+Assert-Contains $buildCommon '@\(''cl\.exe'', ''link\.exe'', ''rc\.exe'', ''mt\.exe''\)' `
+    'Build automation must require compiler, linker, resource compiler, and manifest tool before running CMake.'
 Assert-Contains $buildCommon 'Get-BestCompatibleCudaDependencySet' `
     'Build automation must choose a best-compatible CUDA dependency set.'
 Assert-Contains $buildCommon 'sunone_aimbot_2\\modules\\_downloads' `
@@ -515,6 +518,8 @@ Assert-Contains $buildCudaPs 'Resolve-OptionalBoolean .*Download or update neede
     'CUDA build must prompt whether dependency downloads or updates are needed.'
 Assert-Contains $buildCudaPs 'modules\\opencv\\build\\cuda\\install' `
     'CUDA OpenCV install root must live under modules/opencv/build/cuda/install.'
+Assert-Contains $buildCudaPs '\$opencvGenerator = if \(\$Generator -eq "Ninja Multi-Config"\) \{ "Ninja" \}' `
+    'CUDA builder must use single-config Ninja for OpenCV CUDA to avoid CMake multi-config CUDA object path issues.'
 Assert-Contains $buildCudaPs 'TensorRT-10\*\.Windows\*\.zip' `
     'CUDA dependency guidance must prefer the TensorRT Windows binary SDK archive.'
 Assert-Contains $buildCudaPs 'TensorRT-10\*\.win10\*\.zip' `
@@ -590,10 +595,16 @@ Assert-Contains $buildNoOptionsBat 'build_no-options\.ps1' `
 Assert-Contains $buildNoOptionsBat 'pause' `
     'build_no-options.bat must keep the console open after double-click runs.'
 
-Assert-Contains $buildOpenCvCuda 'Ninja Multi-Config' `
-    'OpenCV CUDA helper must use Ninja Multi-Config by default.'
+Assert-Contains $buildOpenCvCuda '\[string\]\$Generator = "Ninja"' `
+    'OpenCV CUDA helper must use single-config Ninja by default.'
+Assert-Contains $buildOpenCvCuda 'CMAKE_BUILD_TYPE=\$Configuration' `
+    'OpenCV CUDA helper must set CMAKE_BUILD_TYPE for single-config Ninja builds.'
+Assert-Contains $buildOpenCvCuda 'CMAKE_SUPPRESS_REGENERATION=ON' `
+    'OpenCV CUDA helper must suppress Ninja regeneration loops after explicit configure.'
+Assert-Contains $buildOpenCvCuda 'build\\ocv-cuda' `
+    'OpenCV CUDA helper must use a short build path to avoid Windows NVCC path length failures.'
 Assert-Contains $buildOpenCvCuda 'modules\\opencv\\build\\cuda' `
-    'OpenCV CUDA helper must build under modules/opencv/build/cuda.'
+    'OpenCV CUDA helper must install under modules/opencv/build/cuda.'
 Assert-Contains $buildOpenCvCuda 'OPENCV_DNN_CUDA=OFF' `
     'OpenCV CUDA helper must disable OpenCV DNN CUDA when cuDNN is disabled.'
 Assert-Contains $buildOpenCvCuda 'Repair-OpenCvCudevZipHeader' `

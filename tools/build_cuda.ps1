@@ -119,8 +119,9 @@ try {
             throw "CUDA OpenCV is not built. Re-run with download/update enabled so sources can be cloned and built."
         }
 
+        $opencvGenerator = if ($Generator -eq "Ninja Multi-Config") { "Ninja" } else { $Generator }
         $opencvArgs = @(
-            "-Generator", $Generator,
+            "-Generator", $opencvGenerator,
             "-NinjaPath", $ninja,
             "-Configuration", $Configuration,
             "-CudaPath", $resolution.CudaRoot,

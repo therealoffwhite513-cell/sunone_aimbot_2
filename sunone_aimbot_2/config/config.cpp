@@ -62,7 +62,6 @@ bool Config::loadConfig(const std::string& filename)
         detection_resolution = 320;
         capture_fps = 60;
         monitor_idx = 0;
-        circle_mask = false;
         circle_fov_enabled = true;
         circle_fov_radius_percent = 100;
         circle_fov_show_preview = true;
@@ -418,10 +417,7 @@ bool Config::loadConfig(const std::string& filename)
 
     capture_fps = get_long("capture_fps", 60);
     monitor_idx = get_long("monitor_idx", 0);
-    const bool legacyCircleMask = get_bool("circle_mask", false);
-    const bool hasCircleFovSetting = ini.GetValue("", "circle_fov_enabled", nullptr) != nullptr;
-    circle_mask = hasCircleFovSetting ? legacyCircleMask : false;
-    circle_fov_enabled = get_bool("circle_fov_enabled", legacyCircleMask);
+    circle_fov_enabled = get_bool("circle_fov_enabled", true);
     circle_fov_radius_percent = get_long("circle_fov_radius_percent", 100);
     if (circle_fov_radius_percent < 1) circle_fov_radius_percent = 1;
     if (circle_fov_radius_percent > 100) circle_fov_radius_percent = 100;
@@ -784,7 +780,6 @@ bool Config::saveConfig(const std::string& filename)
         << "detection_resolution = " << detection_resolution << "\n"
         << "capture_fps = " << capture_fps << "\n"
         << "monitor_idx = " << monitor_idx << "\n"
-        << "circle_mask = " << (circle_mask ? "true" : "false") << "\n"
         << "circle_fov_enabled = " << (circle_fov_enabled ? "true" : "false") << "\n"
         << "circle_fov_radius_percent = " << circle_fov_radius_percent << "\n"
         << "circle_fov_show_preview = " << (circle_fov_show_preview ? "true" : "false") << "\n"

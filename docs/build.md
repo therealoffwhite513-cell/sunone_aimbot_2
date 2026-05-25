@@ -194,8 +194,7 @@ The CUDA build uses TensorRT for the main TRT backend and still links ONNX Runti
 For best performance:
 
 - Use a TensorRT `.engine` model with the CUDA build.
-- Keep the legacy `circle_mask` off unless you specifically need it.
-- Use Circle FOV instead of the old pixel mask for normal FOV limiting.
+- Use Circle FOV for normal circular aim limiting.
 - Turn off preview/debug windows when measuring capture performance, because preview requires CPU-readable pixels.
 
 The current CUDA preprocess path can intentionally run CPU preprocessing and then copy the tensor to CUDA input. That is useful for diagnosis and compatibility, but pure GPU paths are faster when available.
@@ -224,8 +223,7 @@ This checks important source contracts such as:
 
 - Razer and Teensy runtime wiring.
 - no-options builder behavior.
-- training asset packaging.
-- Circle FOV and legacy mask behavior.
+- Circle FOV behavior.
 - frame-age latency compensation while preserving detection confidences.
 - config and UI integration contracts.
 

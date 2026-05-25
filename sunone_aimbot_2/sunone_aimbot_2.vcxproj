@@ -15,7 +15,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="capture\capture.cpp" />
-    <ClCompile Include="capture\capture_utils.cpp" />
     <ClCompile Include="capture\duplication_api_capture.cpp" />
     <ClCompile Include="capture\udp_capture.cpp" />
     <ClCompile Include="capture\virtual_camera.cpp" />
@@ -89,7 +88,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="capture\capture.h" />
-    <ClInclude Include="capture\capture_utils.h" />
     <ClInclude Include="capture\duplication_api_capture.h" />
     <ClInclude Include="capture\udp_capture.h" />
     <ClInclude Include="capture\virtual_camera.h" />

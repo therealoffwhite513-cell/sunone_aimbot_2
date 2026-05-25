@@ -57,13 +57,11 @@ Start by checking which features force CPU-readable frames:
 - Debug/preview window: `show_window = true`.
 - Data collection.
 - Screenshots.
-- Legacy `circle_mask = true`.
 - Any feature that needs pixels on the CPU for display or saving.
 
 For the current CUDA path, the recommended FOV limiter is:
 
 ```ini
-circle_mask = false
 circle_fov_enabled = true
 ```
 
@@ -109,7 +107,6 @@ That is not automatically wrong. It means some current setting or feature is sel
 ### Recommended Setup
 
 ```ini
-circle_mask = false
 circle_fov_enabled = true
 circle_fov_radius_percent = 100
 circle_fov_show_preview = true
@@ -118,13 +115,9 @@ game_overlay_draw_circle_fov = true
 
 Use the GUI or overlay to visualize the circle. Lower `circle_fov_radius_percent` to make the active area smaller.
 
-### Why Not Use `circle_mask`?
-
-`circle_mask` is the old pixel-mask path. It can add CPU work every frame and can interfere with CUDA capture behavior. It is kept for compatibility and diagnosis, but it should stay off for normal use.
-
 ### Does Drawing the Circle Add Much Overhead?
 
-Drawing the circle in the GUI preview or game overlay is small compared with capture and inference. The expensive part was the legacy per-frame masking work, not the overlay depiction. The overlay depiction only matters when the GUI or overlay is actually open and configured to show it.
+Drawing the circle in the GUI preview or game overlay is small compared with capture and inference. The overlay depiction only matters when the GUI or overlay is actually open and configured to show it.
 
 ## Control Method Guide
 
@@ -319,7 +312,6 @@ The no-options builder only asks DML or CUDA and then builds the existing CMake 
 backend = DML
 ai_model = sunxds_0.5.6.onnx
 input_method = WIN32
-circle_mask = false
 circle_fov_enabled = true
 ```
 
@@ -330,7 +322,6 @@ backend = TRT
 ai_model = sunxds_0.5.6.engine
 capture_method = duplication_api
 capture_use_cuda = true
-circle_mask = false
 show_window = false
 collect_data_while_playing = false
 ```
@@ -367,10 +358,9 @@ Use this order:
 1. Confirm build family: DML or CUDA.
 2. Confirm model type: `.onnx` for DML, `.engine` for TensorRT.
 3. Confirm capture is showing the expected content.
-4. Confirm `circle_mask = false` unless you are testing the legacy mask.
-5. Confirm selected `input_method` has its required runtime/device.
-6. Turn on useful logs or diagnostics.
-7. Run the regression checks after source changes:
+4. Confirm selected `input_method` has its required runtime/device.
+5. Turn on useful logs or diagnostics.
+6. Run the regression checks after source changes:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\regression_checks.ps1

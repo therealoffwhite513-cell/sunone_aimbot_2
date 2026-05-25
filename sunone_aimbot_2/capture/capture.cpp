@@ -35,7 +35,6 @@
 #include "winrt_capture.h"
 #include "virtual_camera.h"
 #include "udp_capture.h"
-#include "capture_utils.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -84,7 +83,6 @@ struct CaptureThreadConfig
     int capture_fps = 0;
     int detection_resolution = 0;
     int monitor_idx = 0;
-    bool circle_mask = false;
     bool circle_fov_enabled = false;
     int circle_fov_radius_percent = 100;
     bool capture_borders = true;
@@ -121,7 +119,6 @@ CaptureThreadConfig SnapshotCaptureConfig()
     snapshot.capture_fps = config.capture_fps;
     snapshot.detection_resolution = config.detection_resolution;
     snapshot.monitor_idx = config.monitor_idx;
-    snapshot.circle_mask = config.circle_mask;
     snapshot.circle_fov_enabled = config.circle_fov_enabled;
     snapshot.circle_fov_radius_percent = config.circle_fov_radius_percent;
     snapshot.capture_borders = config.capture_borders;
@@ -209,7 +206,6 @@ void MaybeLogCudaCaptureDiagnostics(CudaCaptureDiagnostics& diag, const CaptureT
         << " capture_fps=" << cfg.capture_fps
         << " use_cuda=" << (cfg.capture_use_cuda ? "true" : "false")
         << " show_window=" << (cfg.show_window ? "true" : "false")
-        << " legacy_circle_mask=" << (cfg.circle_mask ? "true" : "false")
         << " circle_fov=" << (cfg.circle_fov_enabled ? "true" : "false")
         << " circle_fov_radius=" << cfg.circle_fov_radius_percent
         << " prefer_gpu=" << (diag.lastPreferGpu ? "true" : "false")
@@ -702,7 +698,6 @@ void captureThread(int CAPTURE_WIDTH, int CAPTURE_HEIGHT)
                 currentCfg.backend == "TRT" &&
                 NormalizeCaptureMethod(currentCfg.capture_method) == "duplication_api" &&
                 currentCfg.capture_use_cuda &&
-                !currentCfg.circle_mask &&
                 !depthMaskEnabled;
 
             cudaDiag.lastPreferGpu = preferGpuCapturePath;
@@ -807,9 +802,6 @@ void captureThread(int CAPTURE_WIDTH, int CAPTURE_HEIGHT)
                         screenshotCpu = centered;
                     }
                 }
-
-                if (currentCfg.circle_mask)
-                    screenshotCpu = apply_circle_mask(screenshotCpu);
 
                 detectionFrame = screenshotCpu;
 #ifdef USE_CUDA

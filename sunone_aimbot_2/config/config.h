@@ -18,7 +18,6 @@ public:
     int detection_resolution;
     int capture_fps;
     int monitor_idx;
-    bool circle_mask;
     bool circle_fov_enabled;
     int circle_fov_radius_percent;
     bool circle_fov_show_preview;

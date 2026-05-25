@@ -204,7 +204,6 @@ void draw_stats()
 
         ImGui::Text("Frame queue depth: %d", static_cast<int>(queueDepth));
         ImGui::Text("Circle FOV: %s", config.circle_fov_enabled ? "on" : "off");
-        ImGui::Text("Legacy pixel mask: %s", config.circle_mask ? "on" : "off");
 
 #ifdef USE_CUDA
         if (config.backend == "TRT")
@@ -214,7 +213,6 @@ void draw_stats()
             const bool directCaptureActive =
                 canUseCudaCapture &&
                 config.capture_use_cuda &&
-                !config.circle_mask &&
                 !depthMaskEnabled;
 
             std::string directCaptureStatus;
@@ -222,8 +220,6 @@ void draw_stats()
                 directCaptureStatus = "N/A (requires duplication_api)";
             else if (!config.capture_use_cuda)
                 directCaptureStatus = "Disabled by user";
-            else if (config.circle_mask)
-                directCaptureStatus = "CPU fallback (legacy pixel mask is enabled)";
             else if (depthMaskEnabled)
                 directCaptureStatus = "CPU fallback (depth mask is enabled)";
             else
