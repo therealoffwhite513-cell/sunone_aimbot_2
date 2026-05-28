@@ -58,14 +58,14 @@ public:
     void lcdPictureBottom(unsigned char* buff_128_80);
     void lcdPicture(unsigned char* buff_128_160);
 
-    std::atomic<bool> aiming_active;
-    std::atomic<bool> shooting_active;
-    std::atomic<bool> zooming_active;
+    std::atomic<bool> aiming_active{ false };
+    std::atomic<bool> shooting_active{ false };
+    std::atomic<bool> zooming_active{ false };
 
 private:
-    bool is_open_;
-    bool monitor_;
+    bool is_open_ = false;
+    bool monitor_ = false;
     std::thread monitor_thread_;
-    std::atomic<bool> monitor_running_{ true };
+    std::atomic<bool> monitor_running_{ false };
     std::string ip_, port_, uuid_;
 };

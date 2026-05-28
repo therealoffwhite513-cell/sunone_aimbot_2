@@ -3,6 +3,9 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <winsock2.h>
 #include <Windows.h>
 
@@ -16,17 +19,9 @@
 #include <condition_variable>
 #include <deque>
 #include <random>
-#include <string>
 
 #include "AimbotTarget.h"
-#include "Arduino.h"
-#include "RP2350.h"
-#include "KmboxAConnection.h"
-#include "KmboxNetConnection.h"
-#include "Makcu.h"
-#include "ghub.h"
-#include "rzctl.h"
-#include "Teensy41RawHid.h"
+#include "MouseInput.h"
 #include "aim_kalman.h"
 
 class MouseThread
@@ -52,14 +47,7 @@ private:
     std::atomic<bool> target_detected{ false };
     std::atomic<bool> mouse_pressed{ false };
 
-    Arduino* arduino;
-    RP2350* rp2350;
-    KmboxAConnection* kmbox_a;
-    KmboxNetConnection* kmbox_net;
-    MakcuConnection* makcu;
-    GhubMouse* gHub;
-    RzctlMouse* rzctl;
-    Teensy41RawHid* teensy41RawHid;
+    IMouseInput* mouseInput;
 
     void sendMovementToDriver(int dx, int dy);
 
@@ -135,8 +123,6 @@ private:
     double calculate_speed_multiplier(double distance);
     double currentDetectionDelaySec(double observationAgeSec = -1.0) const;
     double currentPredictionLookaheadSec(double detectionDelaySec) const;
-    bool pressSelectedInput(const std::string& inputMethod);
-    bool releaseSelectedInput(const std::string& inputMethod);
 
 public:
     std::mutex input_method_mutex;
@@ -150,14 +136,7 @@ public:
         double predictionInterval,
         bool auto_shoot,
         float bScope_multiplier,
-        Arduino* arduinoConnection = nullptr,
-        RP2350* rp2350Connection = nullptr,
-        GhubMouse* gHubMouse = nullptr,
-        KmboxAConnection* Kmbox_A_Connection = nullptr,
-        KmboxNetConnection* Kmbox_Net_Connection = nullptr,
-        MakcuConnection* makcuConnection = nullptr,
-        RzctlMouse* rzctlMouse = nullptr,
-        Teensy41RawHid* teensy41RawHidConnection = nullptr
+        IMouseInput* mouseInputDevice = nullptr
     );
     ~MouseThread();
 
@@ -199,15 +178,7 @@ public:
     std::pair<double, double> getMotionCompensationSince(
         std::chrono::steady_clock::time_point since) const;
 
-    void setArduinoConnection(Arduino* newArduino);
-    void setRP2350Connection(RP2350* newRP2350);
-    void setKmboxAConnection(KmboxAConnection* newKmbox_a);
-    void setKmboxNetConnection(KmboxNetConnection* newKmbox_net);
-    void setMakcuConnection(MakcuConnection* newMakcu);
-    void setGHubMouse(GhubMouse* newGHub);
-    void setRzctlMouse(RzctlMouse* newRzctl);
-    void setTeensy41RawHid(Teensy41RawHid* newTeensy41RawHid);
-    void detachInputDevices();
+    void setMouseInput(IMouseInput* newMouseInput);
 
     void setTargetDetected(bool detected) { target_detected.store(detected); }
     void setLastTargetTime(const std::chrono::steady_clock::time_point& t) { last_target_time = t; }

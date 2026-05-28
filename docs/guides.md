@@ -146,20 +146,20 @@ input_method = RAZER
 The runtime wrapper loads:
 
 ```text
-chroma_lighting.dll
+rzctl.dll
 ```
 
-Expected source/build path:
+Expected project path:
 
 ```text
-sunone_aimbot_2\modules\razer-controls\x64\Release\chroma_lighting.dll
+sunone_aimbot_2\rzctl.dll
 ```
 
-The DLL can also be placed beside `ai.exe`. The wrapper searches runtime/module paths and requires the expected exported functions. If the DLL is missing or exports are wrong, Razer movement will not work and no fallback control method is used.
+The DLL can also be placed beside `ai.exe`. If the DLL is missing or exports are wrong, Razer movement will not work and no fallback control method is used.
 
 Quick checks:
 
-- Confirm the DLL filename is exactly `chroma_lighting.dll`.
+- Confirm the DLL filename is exactly `rzctl.dll`.
 - Confirm it is the same architecture as the app, usually x64.
 - Confirm `input_method = RAZER`.
 - Watch console logs for `[Razer]` messages.
@@ -222,7 +222,7 @@ If you are measuring performance, test with the preview closed and then open so 
 
 ### Frame-Age Latency Compensation
 
-The current source is ahead of the upstream SunOner commit that introduced basic frame-age compensation. This project keeps the newer confidence-aware detection buffer, neural tracker fields, explicit Razer/Teensy controls, and no-fallback input routing.
+The current source keeps the confidence-aware detection buffer, explicit Razer/Teensy controls, and no-fallback input routing while using the classic target tracker.
 
 When a frame is captured, the capture thread records a `steady_clock` timestamp before CPU preprocessing or TensorRT submission. DML and TensorRT carry that timestamp into `DetectionBuffer` along with boxes, classes, and confidences. The mouse thread uses the timestamp as the observation time for target tracking and prediction, then subtracts mouse movement that happened after the frame was captured.
 
@@ -235,44 +235,6 @@ game_overlay_compensate_latency = false
 ```
 
 The movement trail is populated only after the selected input backend reports or accepts a movement. It does not introduce a fallback control path.
-
-## Neural Tracker Guide
-
-Enable with:
-
-```ini
-neural_tracker_enabled = true
-neural_tracker_runtime = CPU
-neural_tracker_model_path = models/neural_tracker.onnx
-neural_tracker_blend = 0.35
-```
-
-Use `CPU` first for compatibility. Use `CUDA` only when the CUDA build and runtime dependencies are ready.
-
-If tracking becomes unstable, lower the blend or disable the feature:
-
-```ini
-neural_tracker_enabled = false
-```
-
-## PID Governor Guide
-
-Current config/UI controls:
-
-```ini
-pid_governor_enabled = false
-pid_governor_speed = 5
-pid_governor_blend = 50
-pid_governor_lead_percent = 10
-```
-
-Allowed ranges:
-
-- `pid_governor_speed`: `1..100`
-- `pid_governor_blend`: `1..100`
-- `pid_governor_lead_percent`: `0..50`
-
-These controls are available in the Neural tab. Runtime mouse-governor inference is not yet fully wired into the live mouse movement path, so enabling the setting should be treated as experimental/preparatory.
 
 ## Data Collection Guide
 
@@ -334,10 +296,10 @@ Then check `[CaptureDiag]` output.
 input_method = RAZER
 ```
 
-Make sure `chroma_lighting.dll` is beside `ai.exe` or in:
+Make sure `rzctl.dll` is beside `ai.exe` or in:
 
 ```text
-sunone_aimbot_2\modules\razer-controls\x64\Release
+sunone_aimbot_2
 ```
 
 ### Teensy Control Test

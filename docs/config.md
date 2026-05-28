@@ -99,7 +99,6 @@ Use `circle_fov_enabled` for normal circular aim limiting and overlay visualizat
 | `kalman_reset_timeout_sec` | `0.5` | Resets tracking after this long without detections. |
 | `snapRadius` | `1.5` | Close target snap radius. |
 | `nearRadius` | `25.0` | Radius where near-target behavior starts. |
-| `closeRangeTransition` | `8.0` | Smooth transition radius around close-range movement boundaries. Set `0` for the old hard switch. |
 | `speedCurveExponent` | `3.0` | Curve shape for speed scaling. |
 | `snapBoostFactor` | `1.15` | Extra speed near snap radius. |
 | `easynorecoil` | `false` | Enables simple recoil compensation. |
@@ -111,17 +110,18 @@ Use `circle_fov_enabled` for normal circular aim limiting and overlay visualizat
 Valid values:
 
 ```text
-WIN32, GHUB, RAZER, ARDUINO, RP2350, TEENSY41_HID, KMBOX_NET, KMBOX_A, MAKCU
+WIN32, GHUB, RAZER, ARDUINO, RP2350, TEENSY41, TEENSY41_HID, KMBOX_NET, KMBOX_A, MAKCU
 ```
 
 | Method | Plain meaning |
 |---|---|
 | `WIN32` | Standard Windows mouse events. |
 | `GHUB` | GHub DLL output if available. |
-| `RAZER` | Razer control DLL output through `chroma_lighting.dll`. |
+| `RAZER` | Razer control DLL output through `rzctl.dll`. |
 | `ARDUINO` | Serial Arduino mouse bridge. |
 | `RP2350` | Serial RP2350 mouse bridge. |
-| `TEENSY41_HID` | Teensy 4.1 RawHID control path only. |
+| `TEENSY41` | Teensy 4.1 serial mouse bridge. |
+| `TEENSY41_HID` | Teensy 4.1 RawHID control path. |
 | `KMBOX_NET` | Network kmbox control. |
 | `KMBOX_A` | kmbox A serial/HID style control. |
 | `MAKCU` | MAKCU serial control. |
@@ -221,31 +221,6 @@ The Teensy path sends report-ID-prefixed 64-byte packets and expects matching fi
 | `export_enable_fp16` | `true` in CUDA | TensorRT export option, CUDA builds only. |
 
 `fixed_input_size` exists as an internal runtime config field but is not currently written to the generated config file.
-
-## Neural Tracker
-
-| Key | Default | Meaning |
-|---|---:|---|
-| `neural_tracker_enabled` | `false` | Enables optional neural association/tracking. |
-| `neural_tracker_runtime` | `CPU` | `CPU` or `CUDA`. Invalid values become `CPU`. |
-| `neural_tracker_model_path` | `models/neural_tracker.onnx` | ONNX model path. |
-| `neural_tracker_blend` | `0.35` | Blend amount between standard tracking and neural tracking. Clamped `0.0..1.0`. |
-| `neural_tracker_log_enabled` | `false` | Enables neural association logging. |
-| `neural_tracker_debug_enabled` | `false` | Enables extra neural tracker diagnostics. |
-| `neural_tracker_log_path` | `logs/neural_tracker_association.csv` | Log output path. |
-
-If the model is missing or the feature is disabled, the app uses the normal tracking path.
-
-## PID Governor Controls
-
-| Key | Default | Meaning |
-|---|---:|---|
-| `pid_governor_enabled` | `false` | Enables PID governor settings in the Neural tab/config surface. |
-| `pid_governor_speed` | `5` | Speed slider value. Clamped `1..100`. |
-| `pid_governor_blend` | `50` | Blend slider value. Clamped `1..100`. |
-| `pid_governor_lead_percent` | `10` | Target velocity lead percentage. Clamped `0..50`. |
-
-The current source exposes PID governor UI/config controls. Runtime mouse-governor inference is not yet fully wired as a live replacement for the movement controller.
 
 ## CUDA
 

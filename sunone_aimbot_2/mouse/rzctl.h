@@ -1,11 +1,11 @@
-#ifndef RZCTL_MOUSE_H
-#define RZCTL_MOUSE_H
+#ifndef RZCTL_H
+#define RZCTL_H
 
-#define WIN32_LEAN_AND_MEAN
-#define _WINSOCKAPI_
-#include <Windows.h>
-
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <filesystem>
+#include <windows.h>
 
 class RzctlMouse
 {
@@ -17,15 +17,15 @@ public:
     bool mouse_xy(int x, int y);
     bool mouse_down(int key = 1);
     bool mouse_up(int key = 1);
-    void mouse_close();
+    bool mouse_close();
 
 private:
-    using InitFn = BOOL(__cdecl*)();
-    using MouseMoveFn = void(__cdecl*)(int, int, bool);
-    using MouseMoveStatusFn = BOOL(__cdecl*)(int, int, BOOL);
-    using MouseClickFn = void(__cdecl*)(int);
-    using MouseClickStatusFn = BOOL(__cdecl*)(int);
-    using KeyboardInputFn = void(__cdecl*)(short, int);
+    using InitFn = bool (*)();
+    using MouseMoveFn = void (*)(int, int, bool);
+    using MouseMoveStatusFn = BOOL (*)(int, int, BOOL);
+    using MouseClickFn = void (*)(int);
+    using MouseClickStatusFn = BOOL (*)(int);
+    using KeyboardInputFn = void (*)(short, int);
 
     std::filesystem::path dllPath;
     HMODULE rzctl = nullptr;
@@ -43,4 +43,4 @@ private:
     static int upFlagForKey(int key);
 };
 
-#endif // RZCTL_MOUSE_H
+#endif // RZCTL_H

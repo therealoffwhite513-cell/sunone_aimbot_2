@@ -37,6 +37,20 @@ enum class Teensy41RawHidEvent : uint8_t
 };
 
 #pragma pack(push, 1)
+struct Teensy41RawHidPacket
+{
+    uint16_t magic = Teensy41RawHidHostMagic;
+    uint8_t version = Teensy41RawHidVersion;
+    uint8_t command = static_cast<uint8_t>(Teensy41RawHidCommand::Move);
+    uint8_t buttonMask = 0;
+    int16_t dx = 0;
+    int16_t dy = 0;
+    int16_t wheel = 0;
+    int16_t wheelH = 0;
+    uint32_t sequence = 0;
+    uint8_t reserved[47] = {};
+};
+
 struct Teensy41RawHidHostPacket
 {
     uint16_t magic = Teensy41RawHidHostMagic;
@@ -64,8 +78,12 @@ struct Teensy41RawHidDevicePacket
 };
 #pragma pack(pop)
 
+static_assert(sizeof(Teensy41RawHidPacket) == Teensy41RawHidPacketSize, "Teensy41RawHidPacket must stay 64 bytes.");
 static_assert(sizeof(Teensy41RawHidHostPacket) == Teensy41RawHidPacketSize, "Teensy41RawHidHostPacket must stay 64 bytes.");
 static_assert(sizeof(Teensy41RawHidDevicePacket) == Teensy41RawHidPacketSize, "Teensy41RawHidDevicePacket must stay 64 bytes.");
+static_assert(sizeof(Teensy41RawHidPacket) == 64, "Teensy41RawHidPacket must stay 64 bytes.");
+static_assert(sizeof(Teensy41RawHidHostPacket) == 64, "Teensy41RawHidHostPacket must stay 64 bytes.");
+static_assert(sizeof(Teensy41RawHidDevicePacket) == 64, "Teensy41RawHidDevicePacket must stay 64 bytes.");
 
 class Teensy41RawHid
 {

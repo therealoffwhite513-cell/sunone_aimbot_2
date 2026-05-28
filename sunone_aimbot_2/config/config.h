@@ -55,13 +55,12 @@ public:
 
     float snapRadius;
     float nearRadius;
-    float closeRangeTransition;
     float speedCurveExponent;
     float snapBoostFactor;
 
     bool easynorecoil;
     float easynorecoilstrength;
-    std::string input_method; // "WIN32", "GHUB", "RAZER", "ARDUINO", "RP2350", "TEENSY41_HID", "KMBOX_NET", "KMBOX_A", "MAKCU"
+    std::string input_method; // "WIN32", "GHUB", "RAZER", "ARDUINO", "RP2350", "TEENSY41", "TEENSY41_HID", "KMBOX_NET", "KMBOX_A", "MAKCU"
 
     // Wind mouse
     bool wind_mouse_enabled;
@@ -120,21 +119,6 @@ public:
     bool export_enable_fp16;
 #endif
     bool fixed_input_size;
-
-    // Neural tracker association
-    bool neural_tracker_enabled;
-    std::string neural_tracker_runtime; // "CPU" or "CUDA"
-    std::string neural_tracker_model_path;
-    float neural_tracker_blend;
-    bool neural_tracker_log_enabled;
-    bool neural_tracker_debug_enabled;
-    std::string neural_tracker_log_path;
-
-    // PID governor controls
-    bool pid_governor_enabled;
-    int pid_governor_speed;
-    int pid_governor_blend;
-    int pid_governor_lead_percent;
 
     // CUDA
 #ifdef USE_CUDA

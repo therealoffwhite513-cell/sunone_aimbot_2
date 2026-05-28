@@ -161,7 +161,7 @@ When `AIMBOT_COPY_RUNTIME_DLLS` is enabled, CMake copies available runtime DLLs 
 
 - OpenCV runtime DLL.
 - `ghub_mouse.dll`, when present.
-- `chroma_lighting.dll`, when present.
+- `rzctl.dll`, when present.
 - ONNX Runtime DLLs.
 - DirectML DLL for DML support.
 - TensorRT and CUDA provider DLLs for CUDA builds.
@@ -170,10 +170,10 @@ When `AIMBOT_COPY_RUNTIME_DLLS` is enabled, CMake copies available runtime DLLs 
 The Razer control DLL is expected at:
 
 ```text
-sunone_aimbot_2\modules\razer-controls\x64\Release\chroma_lighting.dll
+sunone_aimbot_2\rzctl.dll
 ```
 
-You can override its CMake cache path with `AIMBOT_RAZER_CONTROL_DLL`.
+You can override its CMake cache path with `AIMBOT_RZCTL_DLL`.
 
 ## Important CMake Options
 
@@ -181,7 +181,7 @@ You can override its CMake cache path with `AIMBOT_RAZER_CONTROL_DLL`.
 |---|---|
 | `AIMBOT_USE_CUDA` | `ON` for CUDA + TensorRT, `OFF` for DML. |
 | `AIMBOT_COPY_RUNTIME_DLLS` | Copies runtime DLLs beside `ai.exe`. |
-| `AIMBOT_RAZER_CONTROL_DLL` | Source path for `chroma_lighting.dll`. |
+| `AIMBOT_RZCTL_DLL` | Source path for `rzctl.dll`. |
 | `AIMBOT_OPENCV_DML_ROOT` | DML OpenCV layout root. |
 | `AIMBOT_OPENCV_CUDA_ROOT` | CUDA OpenCV layout root. |
 | `AIMBOT_TENSORRT_ROOT` | TensorRT SDK root. |
@@ -235,6 +235,6 @@ This checks important source contracts such as:
 | CUDA dependency missing | Install CUDA Toolkit and TensorRT Windows binary SDK, then rerun the CUDA builder. |
 | OpenCV CUDA compile errors | Check CUDA, Visual Studio compiler, OpenCV, and contrib compatibility. If you only need CPU preprocess for diagnosis, keep legacy GPU-heavy capture features off and rebuild the main app after the dependency tree is healthy. |
 | DML build cannot find OpenCV | Run the DML builder with downloads enabled or set OpenCV CMake paths manually. |
-| Missing `chroma_lighting.dll` | Build or copy the Razer controls DLL to `sunone_aimbot_2\modules\razer-controls\x64\Release\chroma_lighting.dll` or next to `ai.exe`. |
+| Missing `rzctl.dll` | Keep `sunone_aimbot_2\rzctl.dll` in the project or copy it next to `ai.exe`. |
 | Training bootstrap fails | Install training requirements or place the expected `.onnx` files in `sunone_aimbot_2\modules\training\models`. |
 | App runs but Razer or Teensy control does nothing | The selected control method does not fall back. Check the selected `input_method`, the Razer DLL, or the Teensy RawHID endpoint. |

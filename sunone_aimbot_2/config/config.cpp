@@ -9,7 +9,6 @@
 #include <filesystem>
 #include <unordered_map>
 #include <algorithm>
-#include <cctype>
 
 #include "config.h"
 #include "modules/SimpleIni.h"
@@ -99,7 +98,6 @@ bool Config::loadConfig(const std::string& filename)
 
         snapRadius = 1.5f;
         nearRadius = 25.0f;
-        closeRangeTransition = 8.0f;
         speedCurveExponent = 3.0f;
         snapBoostFactor = 1.15f;
 
@@ -174,21 +172,6 @@ bool Config::loadConfig(const std::string& filename)
         export_enable_fp16 = true;
 #endif
         fixed_input_size = false;
-
-        // Neural tracker association
-        neural_tracker_enabled = false;
-        neural_tracker_runtime = "CPU";
-        neural_tracker_model_path = "models/neural_tracker.onnx";
-        neural_tracker_blend = 0.35f;
-        neural_tracker_log_enabled = false;
-        neural_tracker_debug_enabled = false;
-        neural_tracker_log_path = "logs/neural_tracker_association.csv";
-
-        // PID governor controls
-        pid_governor_enabled = false;
-        pid_governor_speed = 5;
-        pid_governor_blend = 50;
-        pid_governor_lead_percent = 10;
 
         // CUDA
 #ifdef USE_CUDA
@@ -456,7 +439,6 @@ bool Config::loadConfig(const std::string& filename)
     
     snapRadius = (float)get_double("snapRadius", 1.5);
     nearRadius = (float)get_double("nearRadius", 25.0);
-    closeRangeTransition = (float)get_double("closeRangeTransition", 8.0);
     speedCurveExponent = (float)get_double("speedCurveExponent", 3.0);
     snapBoostFactor = (float)get_double("snapBoostFactor", 1.15);
 
@@ -530,21 +512,6 @@ bool Config::loadConfig(const std::string& filename)
     export_enable_fp8 = get_bool("export_enable_fp8", true);
     export_enable_fp16 = get_bool("export_enable_fp16", true);
 #endif
-
-    // Neural tracker association
-    neural_tracker_enabled = get_bool("neural_tracker_enabled", false);
-    neural_tracker_runtime = get_string("neural_tracker_runtime", "CPU");
-    neural_tracker_model_path = get_string("neural_tracker_model_path", "models/neural_tracker.onnx");
-    neural_tracker_blend = (float)get_double("neural_tracker_blend", 0.35);
-    neural_tracker_log_enabled = get_bool("neural_tracker_log_enabled", false);
-    neural_tracker_debug_enabled = get_bool("neural_tracker_debug_enabled", false);
-    neural_tracker_log_path = get_string("neural_tracker_log_path", "logs/neural_tracker_association.csv");
-
-    // PID governor controls
-    pid_governor_enabled = get_bool("pid_governor_enabled", false);
-    pid_governor_speed = get_long("pid_governor_speed", 5);
-    pid_governor_blend = get_long("pid_governor_blend", 50);
-    pid_governor_lead_percent = get_long("pid_governor_lead_percent", 10);
 
     // CUDA
 #ifdef USE_CUDA
@@ -718,26 +685,6 @@ bool Config::loadConfig(const std::string& filename)
     if (auto_label_max_boxes < 1) auto_label_max_boxes = 1;
     if (auto_label_max_boxes > 200) auto_label_max_boxes = 200;
 
-    std::transform(neural_tracker_runtime.begin(), neural_tracker_runtime.end(), neural_tracker_runtime.begin(),
-        [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-    if (neural_tracker_runtime != "CPU" && neural_tracker_runtime != "CUDA")
-        neural_tracker_runtime = "CPU";
-    if (neural_tracker_model_path.empty())
-        neural_tracker_model_path = "models/neural_tracker.onnx";
-    if (neural_tracker_blend < 0.0f) neural_tracker_blend = 0.0f;
-    if (neural_tracker_blend > 1.0f) neural_tracker_blend = 1.0f;
-    if (neural_tracker_log_path.empty())
-        neural_tracker_log_path = "logs/neural_tracker_association.csv";
-
-    if (pid_governor_speed < 1) pid_governor_speed = 1;
-    if (pid_governor_speed > 100) pid_governor_speed = 100;
-    if (pid_governor_blend < 1) pid_governor_blend = 1;
-    if (pid_governor_blend > 100) pid_governor_blend = 100;
-    if (pid_governor_lead_percent < 0) pid_governor_lead_percent = 0;
-    if (pid_governor_lead_percent > 50) pid_governor_lead_percent = 50;
-    if (closeRangeTransition < 0.0f) closeRangeTransition = 0.0f;
-    if (closeRangeTransition > 80.0f) closeRangeTransition = 80.0f;
-
     // Classes
     class_player = get_long("class_player", 0);
     class_head = get_long("class_head", 1);
@@ -823,7 +770,6 @@ bool Config::saveConfig(const std::string& filename)
 
         << "snapRadius = " << snapRadius << "\n"
         << "nearRadius = " << nearRadius << "\n"
-        << "closeRangeTransition = " << closeRangeTransition << "\n"
         << "speedCurveExponent = " << speedCurveExponent << "\n"
         << std::fixed << std::setprecision(2)
         << "snapBoostFactor = " << snapBoostFactor << "\n"
@@ -832,7 +778,7 @@ bool Config::saveConfig(const std::string& filename)
         << std::fixed << std::setprecision(1)
         << "easynorecoilstrength = " << easynorecoilstrength << "\n"
 
-        << "# WIN32, GHUB, RAZER, ARDUINO, RP2350, TEENSY41_HID, KMBOX_NET, KMBOX_A, MAKCU\n"
+        << "# WIN32, GHUB, RAZER, ARDUINO, RP2350, TEENSY41, TEENSY41_HID, KMBOX_NET, KMBOX_A, MAKCU\n"
         << "input_method = " << input_method << "\n\n";
 
     // Wind mouse
@@ -902,22 +848,6 @@ bool Config::saveConfig(const std::string& filename)
         << "export_enable_fp16 = " << (export_enable_fp16 ? "true" : "false") << "\n"
 #endif
         ;
-
-    file << "\n# Neural tracker association\n"
-        << "neural_tracker_enabled = " << (neural_tracker_enabled ? "true" : "false") << "\n"
-        << "neural_tracker_runtime = " << neural_tracker_runtime << "\n"
-        << "neural_tracker_model_path = " << neural_tracker_model_path << "\n"
-        << std::fixed << std::setprecision(2)
-        << "neural_tracker_blend = " << neural_tracker_blend << "\n"
-        << "neural_tracker_log_enabled = " << (neural_tracker_log_enabled ? "true" : "false") << "\n"
-        << "neural_tracker_debug_enabled = " << (neural_tracker_debug_enabled ? "true" : "false") << "\n"
-        << "neural_tracker_log_path = " << neural_tracker_log_path << "\n\n";
-
-    file << "# PID governor controls\n"
-        << "pid_governor_enabled = " << (pid_governor_enabled ? "true" : "false") << "\n"
-        << "pid_governor_speed = " << pid_governor_speed << "\n"
-        << "pid_governor_blend = " << pid_governor_blend << "\n"
-        << "pid_governor_lead_percent = " << pid_governor_lead_percent << "\n\n";
 
     // CUDA
 #ifdef USE_CUDA

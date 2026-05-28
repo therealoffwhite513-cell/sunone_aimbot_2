@@ -11,7 +11,6 @@
 
 #include "config.h"
 #include "hidapi.h"
-#include "sunone_aimbot_2.h"
 
 namespace
 {
@@ -65,8 +64,8 @@ std::string narrow(const wchar_t* value)
 int clampInt16(int value)
 {
     return std::clamp(value,
-        static_cast<int>((std::numeric_limits<int16_t>::min)()),
-        static_cast<int>((std::numeric_limits<int16_t>::max)()));
+        static_cast<int>(std::numeric_limits<int16_t>::min()),
+        static_cast<int>(std::numeric_limits<int16_t>::max()));
 }
 }
 
@@ -76,15 +75,15 @@ void Teensy41RawHid::HidDeviceDeleter::operator()(hid_device* device) const
         hid_close(device);
 }
 
-Teensy41RawHid::Teensy41RawHid(const Config& cfg)
-    : usagePage_(clampToUint16(cfg.teensy_hid_usage_page, 0xFFAB)),
-      usageId_(clampToUint16(cfg.teensy_hid_usage_id, 0x0200)),
-      openIndex_(std::clamp(cfg.teensy_hid_open_index, 0, 32)),
-      packetTimeoutMs_(std::clamp(cfg.teensy_hid_packet_timeout_ms, 0, 100)),
-      reconnectIntervalMs_(std::clamp(cfg.teensy_hid_reconnect_interval_ms, 50, 10000)),
-      serialFilter_(cfg.teensy_hid_serial),
-      vidFilter_(cfg.teensy_hid_vid_filter),
-      pidFilter_(cfg.teensy_hid_pid_filter)
+Teensy41RawHid::Teensy41RawHid(const Config& config)
+    : usagePage_(clampToUint16(config.teensy_hid_usage_page, 0xFFAB)),
+      usageId_(clampToUint16(config.teensy_hid_usage_id, 0x0200)),
+      openIndex_(std::clamp(config.teensy_hid_open_index, 0, 32)),
+      packetTimeoutMs_(std::clamp(config.teensy_hid_packet_timeout_ms, 0, 100)),
+      reconnectIntervalMs_(std::clamp(config.teensy_hid_reconnect_interval_ms, 50, 10000)),
+      serialFilter_(config.teensy_hid_serial),
+      vidFilter_(config.teensy_hid_vid_filter),
+      pidFilter_(config.teensy_hid_pid_filter)
 {
     connected_.store(open(), std::memory_order_release);
     readerThread_ = std::thread(&Teensy41RawHid::readerLoop, this);
@@ -208,7 +207,6 @@ bool Teensy41RawHid::sendPacket(Teensy41RawHidCommand command, int dx, int dy, i
         connected_.store(false, std::memory_order_release);
         return false;
     }
-
     return written == static_cast<int>(report.size());
 }
 
@@ -234,13 +232,11 @@ void Teensy41RawHid::readerLoop()
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
-
         if (read < 0)
         {
             connected_.store(false, std::memory_order_release);
             continue;
         }
-
         const size_t offset = (read == static_cast<int>(Teensy41RawHidPacketSize + 1) && buffer[0] == 0) ? 1u : 0u;
         if (read - static_cast<int>(offset) < static_cast<int>(sizeof(Teensy41RawHidDevicePacket)))
             continue;
@@ -261,15 +257,12 @@ void Teensy41RawHid::applyButtonEvent(uint8_t buttonId, bool pressed)
     {
     case 1:
         shootingActive_.store(pressed, std::memory_order_release);
-        shooting.store(pressed);
         break;
     case 2:
         zoomingActive_.store(pressed, std::memory_order_release);
-        zooming.store(pressed);
         break;
     case 5:
         aimingActive_.store(pressed, std::memory_order_release);
-        aiming.store(pressed);
         break;
     default:
         break;

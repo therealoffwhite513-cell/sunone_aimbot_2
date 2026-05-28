@@ -23,8 +23,8 @@ inline float AdaptiveItemWidth(float ratio = 0.64f) noexcept
 inline void DrawBodyFrame(const ImVec2& min, const ImVec2& max, bool subsection = false) noexcept
 {
     ImDrawList* drawList = ImGui::GetWindowDrawList();
-    const ImU32 border = subsection ? IM_COL32(255, 255, 255, 42) : IM_COL32(255, 255, 255, 56);
-    drawList->AddRect(min, max, border, 0.0f, 0, 1.0f);
+    const ImU32 border = subsection ? IM_COL32(76, 89, 101, 92) : IM_COL32(76, 89, 101, 122);
+    drawList->AddRect(min, max, border, subsection ? 3.0f : 4.0f, 0, 1.0f);
 }
 
 inline void BeginBodyGroup(bool subsection = false) noexcept
@@ -33,10 +33,10 @@ inline void BeginBodyGroup(bool subsection = false) noexcept
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5.0f, subsection ? 3.0f : 4.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 3.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(14, 14, 14, 245));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, IM_COL32(22, 22, 22, 250));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, IM_COL32(30, 30, 30, 252));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(23, 26, 31, 246));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, IM_COL32(31, 36, 42, 250));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, IM_COL32(38, 48, 54, 252));
     ImGui::PushItemWidth(AdaptiveItemWidth(subsection ? 0.68f : 0.64f));
     ImGui::Dummy(ImVec2(0.0f, subsection ? 1.0f : 2.0f));
     ImGui::Indent(subsection ? 6.0f : 7.0f);
@@ -83,12 +83,12 @@ inline bool BeginSection(const char* label, const char* id = nullptr, bool defau
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7.0f, 3.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(18, 18, 18, 248));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(24, 24, 24, 252));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(32, 32, 32, 252));
-    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(255, 255, 255, 56));
-    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(232, 237, 245, 255));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(20, 24, 29, 248));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(29, 36, 42, 252));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(35, 82, 80, 252));
+    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(76, 89, 101, 132));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(231, 236, 242, 255));
 
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Framed;
     if (defaultOpen)
@@ -122,11 +122,11 @@ inline bool BeginSubsection(const char* label, bool defaultOpen = true) noexcept
 {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7.0f, 3.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(15, 15, 15, 244));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(21, 21, 21, 250));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(28, 28, 28, 252));
-    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(255, 255, 255, 46));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(18, 22, 27, 244));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(27, 33, 39, 250));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(31, 67, 66, 252));
+    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(76, 89, 101, 102));
     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(216, 223, 234, 252));
 
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Framed;

@@ -14,21 +14,8 @@ public:
 
     double pivotX;
     double pivotY;
-    double smoothX;
-    double smoothY;
-    double confidence;
-    int trackId;
 
-    AimbotTarget(
-        int x,
-        int y,
-        int w,
-        int h,
-        int classId,
-        double pivotX = 0.0,
-        double pivotY = 0.0,
-        double confidence = 1.0,
-        int trackId = -1);
+    AimbotTarget(int x, int y, int w, int h, int classId, double pivotX = 0.0, double pivotY = 0.0);
 };
 
 AimbotTarget* sortTargets(
@@ -36,8 +23,7 @@ AimbotTarget* sortTargets(
     const std::vector<int>& classes,
     int screenWidth,
     int screenHeight,
-    bool disableHeadshot,
-    const std::vector<float>* confidences = nullptr
+    bool disableHeadshot
 );
 
 struct LockedTargetInfo
@@ -61,31 +47,12 @@ struct TrackDebugInfo
     bool observedThisFrame = false;
     int missedFrames = 0;
     bool isLocked = false;
-    float confidence = 1.0f;
-    int hits = 0;
-    double lastAssociationScore = 0.0;
-    double lastAssociationDistancePx = 0.0;
-    double lastAssociationIou = 0.0;
-    double lastHeadingAlignment = 0.0;
-    double lastNeuralScore = 0.5;
-    double lastNeuralBonus = 0.0;
-    bool lastNeuralEvaluated = false;
 };
 
 class MultiTargetTracker
 {
 public:
     void reset();
-    void update(
-        const std::vector<cv::Rect>& boxes,
-        const std::vector<int>& classes,
-        const std::vector<float>& confidences,
-        int screenWidth,
-        int screenHeight,
-        bool disableHeadshot,
-        bool keepCurrentLock,
-        std::chrono::steady_clock::time_point observationTime = {}
-    );
     void update(
         const std::vector<cv::Rect>& boxes,
         const std::vector<int>& classes,
@@ -108,17 +75,9 @@ private:
         int classId = -1;
         int hits = 0;
         int missed = 0;
-        float confidence = 1.0f;
         bool observedThisFrame = false;
         double pivotX = 0.0;
         double pivotY = 0.0;
-        double lastAssociationScore = 0.0;
-        double lastAssociationDistancePx = 0.0;
-        double lastAssociationIou = 0.0;
-        double lastHeadingAlignment = 0.0;
-        double lastNeuralScore = 0.5;
-        double lastNeuralBonus = 0.0;
-        bool lastNeuralEvaluated = false;
         std::chrono::steady_clock::time_point lastUpdate;
     };
 
@@ -126,7 +85,6 @@ private:
     {
         cv::Rect2f box;
         int classId = -1;
-        float confidence = 1.0f;
         double pivotX = 0.0;
         double pivotY = 0.0;
     };

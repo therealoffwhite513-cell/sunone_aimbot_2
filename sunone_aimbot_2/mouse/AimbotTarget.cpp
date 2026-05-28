@@ -7,23 +7,20 @@
 #include <limits>
 #include <algorithm>
 #include <numeric>
-#include <memory>
+#include <mutex>
 #include <opencv2/opencv.hpp>
 
 #include "sunone_aimbot_2.h"
 #include "AimbotTarget.h"
 #include "config.h"
-#include "neural/NeuralTracker.h"
 
 AimbotTarget::AimbotTarget()
-    : x(0), y(0), w(0), h(0), classId(0), pivotX(0.0), pivotY(0.0),
-      smoothX(0.0), smoothY(0.0), confidence(1.0), trackId(-1)
+    : x(0), y(0), w(0), h(0), classId(0), pivotX(0.0), pivotY(0.0)
 {
 }
 
-AimbotTarget::AimbotTarget(int x_, int y_, int w_, int h_, int cls, double px, double py, double conf, int tid)
-    : x(x_), y(y_), w(w_), h(h_), classId(cls), pivotX(px), pivotY(py),
-      smoothX(px), smoothY(py), confidence(conf), trackId(tid)
+AimbotTarget::AimbotTarget(int x_, int y_, int w_, int h_, int cls, double px, double py)
+    : x(x_), y(y_), w(w_), h(h_), classId(cls), pivotX(px), pivotY(py)
 {
 }
 
@@ -32,15 +29,26 @@ AimbotTarget* sortTargets(
     const std::vector<int>& classes,
     int screenWidth,
     int screenHeight,
-    bool disableHeadshot,
-    const std::vector<float>* confidences)
+    bool disableHeadshot)
 {
-    if (boxes.empty() || classes.empty())
+    const size_t inputCount = std::min(boxes.size(), classes.size());
+    if (inputCount == 0)
     {
         return nullptr;
     }
 
     cv::Point center(screenWidth / 2, screenHeight / 2);
+    int classHead = 1;
+    int classPlayer = 0;
+    float headOffset = 0.05f;
+    float bodyOffset = 0.15f;
+    {
+        std::lock_guard<std::mutex> lock(configMutex);
+        classHead = config.class_head;
+        classPlayer = config.class_player;
+        headOffset = config.head_y_offset;
+        bodyOffset = config.body_y_offset;
+    }
 
     double minDistance = std::numeric_limits<double>::max();
     int nearestIdx = -1;
@@ -48,11 +56,14 @@ AimbotTarget* sortTargets(
 
     if (!disableHeadshot)
     {
-        for (size_t i = 0; i < boxes.size(); i++)
+        for (size_t i = 0; i < inputCount; i++)
         {
-            if (classes[i] == config.class_head)
+            if (boxes[i].width <= 0 || boxes[i].height <= 0)
+                continue;
+
+            if (classes[i] == classHead)
             {
-                int headOffsetY = static_cast<int>(boxes[i].height * config.head_y_offset);
+                int headOffsetY = static_cast<int>(boxes[i].height * headOffset);
                 cv::Point targetPoint(boxes[i].x + boxes[i].width / 2, boxes[i].y + headOffsetY);
                 double distance = std::pow(targetPoint.x - center.x, 2) + std::pow(targetPoint.y - center.y, 2);
                 if (distance < minDistance)
@@ -68,14 +79,17 @@ AimbotTarget* sortTargets(
     if (disableHeadshot || nearestIdx == -1)
     {
         minDistance = std::numeric_limits<double>::max();
-        for (size_t i = 0; i < boxes.size(); i++)
+        for (size_t i = 0; i < inputCount; i++)
         {
-            if (disableHeadshot && classes[i] == config.class_head)
+            if (boxes[i].width <= 0 || boxes[i].height <= 0)
                 continue;
 
-            if (classes[i] == config.class_player)
+            if (disableHeadshot && classes[i] == classHead)
+                continue;
+
+            if (classes[i] == classPlayer)
             {
-                int offsetY = static_cast<int>(boxes[i].height * config.body_y_offset);
+                int offsetY = static_cast<int>(boxes[i].height * bodyOffset);
                 cv::Point targetPoint(boxes[i].x + boxes[i].width / 2, boxes[i].y + offsetY);
                 double distance = std::pow(targetPoint.x - center.x, 2) + std::pow(targetPoint.y - center.y, 2);
                 if (distance < minDistance)
@@ -94,9 +108,9 @@ AimbotTarget* sortTargets(
     }
 
     int finalY = 0;
-    if (classes[nearestIdx] == config.class_head)
+    if (classes[nearestIdx] == classHead)
     {
-        int headOffsetY = static_cast<int>(boxes[nearestIdx].height * config.head_y_offset);
+        int headOffsetY = static_cast<int>(boxes[nearestIdx].height * headOffset);
         finalY = boxes[nearestIdx].y + headOffsetY - boxes[nearestIdx].height / 2;
     }
     else
@@ -112,11 +126,7 @@ AimbotTarget* sortTargets(
     double pivotX = finalX + (finalW / 2.0);
     double pivotY = finalY + (finalH / 2.0);
 
-    double finalConfidence = 1.0;
-    if (confidences && nearestIdx >= 0 && static_cast<size_t>(nearestIdx) < confidences->size())
-        finalConfidence = std::clamp(static_cast<double>((*confidences)[nearestIdx]), 0.0, 1.0);
-
-    return new AimbotTarget(finalX, finalY, finalW, finalH, finalClass, pivotX, pivotY, finalConfidence);
+    return new AimbotTarget(finalX, finalY, finalW, finalH, finalClass, pivotX, pivotY);
 }
 
 float MultiTargetTracker::iou(const cv::Rect2f& a, const cv::Rect2f& b)
@@ -209,58 +219,52 @@ void MultiTargetTracker::update(
     bool keepCurrentLock,
     std::chrono::steady_clock::time_point observationTime)
 {
-    static const std::vector<float> emptyConfidences;
-    update(boxes, classes, emptyConfidences, screenWidth, screenHeight, disableHeadshot, keepCurrentLock, observationTime);
-}
-
-void MultiTargetTracker::update(
-    const std::vector<cv::Rect>& boxes,
-    const std::vector<int>& classes,
-    const std::vector<float>& confidences,
-    int screenWidth,
-    int screenHeight,
-    bool disableHeadshot,
-    bool keepCurrentLock,
-    std::chrono::steady_clock::time_point observationTime)
-{
     const auto now = (observationTime.time_since_epoch().count() != 0)
         ? observationTime
         : std::chrono::steady_clock::now();
+    int classPlayer = 0;
+    int classHead = 1;
+    float bodyOffset = 0.15f;
+    float headOffset = 0.05f;
+    {
+        std::lock_guard<std::mutex> lock(configMutex);
+        classPlayer = config.class_player;
+        classHead = config.class_head;
+        bodyOffset = config.body_y_offset;
+        headOffset = config.head_y_offset;
+    }
 
     for (auto& t : tracks_)
         t.observedThisFrame = false;
 
-    if (boxes.size() != classes.size())
-    {
-        pruneDeadTracks();
-        return;
-    }
+    const size_t inputCount = std::min(boxes.size(), classes.size());
 
     std::vector<DetectionCandidate> dets;
-    dets.reserve(boxes.size());
-    for (size_t i = 0; i < boxes.size(); ++i)
+    dets.reserve(inputCount);
+    for (size_t i = 0; i < inputCount; ++i)
     {
         const int cls = classes[i];
         if (disableHeadshot)
         {
-            if (cls != config.class_player)
+            if (cls != classPlayer)
                 continue;
         }
         else
         {
-            if (cls != config.class_player && cls != config.class_head)
+            if (cls != classPlayer && cls != classHead)
             {
                 continue;
             }
         }
 
         const cv::Rect& b = boxes[i];
-        const double yOffset = (cls == config.class_head) ? config.head_y_offset : config.body_y_offset;
+        if (b.width <= 0 || b.height <= 0)
+            continue;
+
+        const double yOffset = (cls == classHead) ? headOffset : bodyOffset;
         DetectionCandidate d;
         d.box = cv::Rect2f(static_cast<float>(b.x), static_cast<float>(b.y), static_cast<float>(b.width), static_cast<float>(b.height));
         d.classId = cls;
-        if (i < confidences.size())
-            d.confidence = std::clamp(confidences[i], 0.0f, 1.0f);
         d.pivotX = b.x + b.width * 0.5;
         d.pivotY = b.y + b.height * yOffset;
         dets.push_back(d);
@@ -274,7 +278,7 @@ void MultiTargetTracker::update(
         playerIdx.reserve(dets.size());
         for (size_t i = 0; i < dets.size(); ++i)
         {
-            if (dets[i].classId == config.class_player)
+            if (dets[i].classId == classPlayer)
                 playerIdx.push_back(i);
         }
 
@@ -289,7 +293,7 @@ void MultiTargetTracker::update(
             for (size_t hi = 0; hi < dets.size(); ++hi)
             {
                 const auto& h = dets[hi];
-                if (h.classId != config.class_head)
+                if (h.classId != classHead)
                     continue;
 
                 const double headCx = h.box.x + h.box.width * 0.5;
@@ -327,8 +331,7 @@ void MultiTargetTracker::update(
                         playerHasHeadPivot[bestPlayer] = 1;
                         playerHeadPivotDist[bestPlayer] = bestDist;
                         playerHeadPivotX[bestPlayer] = h.box.x + h.box.width * 0.5;
-                        playerHeadPivotY[bestPlayer] = h.box.y + h.box.height * config.head_y_offset;
-                        dets[bestPlayer].confidence = std::max(dets[bestPlayer].confidence, h.confidence);
+                        playerHeadPivotY[bestPlayer] = h.box.y + h.box.height * headOffset;
                     }
                 }
             }
@@ -342,7 +345,7 @@ void MultiTargetTracker::update(
                     continue;
 
                 DetectionCandidate d = dets[i];
-                if (d.classId == config.class_player && playerHasHeadPivot[i])
+                if (d.classId == classPlayer && playerHasHeadPivot[i])
                 {
                     d.pivotX = playerHeadPivotX[i];
                     d.pivotY = playerHeadPivotY[i];
@@ -357,100 +360,21 @@ void MultiTargetTracker::update(
     std::vector<int> detAssigned(dets.size(), -1);
     std::vector<int> trackAssigned(tracks_.size(), -1);
 
-    struct AssociationBreakdown
-    {
-        double score = std::numeric_limits<double>::infinity();
-        double distancePx = 0.0;
-        double overlap = 0.0;
-        double headingAlignment = 0.0;
-        double neuralScore = 0.5;
-        double neuralBonus = 0.0;
-        bool neuralEvaluated = false;
-        bool accepted = false;
-        aim::neural::NeuralTrackerFeatures neuralFeatures;
-    };
-
-    auto getNeuralTracker = []() -> std::shared_ptr<aim::neural::INeuralTracker>
+    auto computeMatchScore = [&](const TrackState& t, const DetectionCandidate& d, bool relaxedForLocked) -> double
         {
-            static std::shared_ptr<aim::neural::INeuralTracker> tracker;
-            static std::string loadedPath;
-            static std::string loadedRuntime;
-            static bool attemptedLoad = false;
-
-            if (!config.neural_tracker_enabled)
-            {
-                tracker.reset();
-                loadedPath.clear();
-                loadedRuntime.clear();
-                attemptedLoad = false;
-                return nullptr;
-            }
-
-            if (!attemptedLoad
-                || loadedPath != config.neural_tracker_model_path
-                || loadedRuntime != config.neural_tracker_runtime)
-            {
-                loadedPath = config.neural_tracker_model_path;
-                loadedRuntime = config.neural_tracker_runtime;
-                tracker = aim::neural::createNeuralTracker(loadedPath, loadedRuntime);
-                attemptedLoad = true;
-            }
-
-            return tracker;
-        };
-
-    auto buildNeuralFeatures = [&](const TrackState& t,
-                                   const DetectionCandidate& d,
-                                   const cv::Rect2f& predictedBox,
-                                   double dt,
-                                   double dist,
-                                   double maxDist,
-                                   double overlap,
-                                   double headingAlignment,
-                                   bool classCompatible,
-                                   bool relaxedForLocked) -> aim::neural::NeuralTrackerFeatures
-        {
-            const double predictedArea = std::max(1.0, static_cast<double>(predictedBox.width * predictedBox.height));
-            const double detArea = std::max(1.0, static_cast<double>(d.box.width * d.box.height));
-            const double predCx = predictedBox.x + predictedBox.width * 0.5;
-            const double predCy = predictedBox.y + predictedBox.height * 0.5;
-            const double speed = std::hypot(t.velocity.x, t.velocity.y);
-            const double screenScale = std::max(1.0, static_cast<double>(std::max(screenWidth, screenHeight)));
-
-            aim::neural::NeuralTrackerFeatures features;
-            features.distanceNorm = static_cast<float>(std::clamp(dist / std::max(1.0, maxDist), 0.0, 3.0));
-            features.iou = static_cast<float>(std::clamp(overlap, 0.0, 1.0));
-            features.sizeLogRatio = static_cast<float>(std::clamp(std::log(detArea / predictedArea), -3.0, 3.0));
-            features.detectionConfidence = std::clamp(d.confidence, 0.0f, 1.0f);
-            features.trackConfidence = std::clamp(t.confidence, 0.0f, 1.0f);
-            features.headingAlignment = static_cast<float>(std::clamp(headingAlignment, -1.0, 1.0));
-            features.trackMissedNorm = static_cast<float>(std::clamp(t.missed / 12.0, 0.0, 1.0));
-            features.trackHitsNorm = static_cast<float>(std::clamp(t.hits / 12.0, 0.0, 1.0));
-            features.isLocked = (t.id == lockedTrackId_) ? 1.0f : 0.0f;
-            features.classCompatible = classCompatible ? 1.0f : 0.0f;
-            features.dt = static_cast<float>(std::clamp(dt, 0.0, 0.25));
-            features.speedNorm = static_cast<float>(std::clamp(speed / (screenScale * 3.5), 0.0, 2.0));
-            features.targetSizeNorm = static_cast<float>(std::clamp(std::sqrt(detArea) / screenScale, 0.0, 1.0));
-            features.pivotOffsetXNorm = static_cast<float>(std::clamp((d.pivotX - predCx) / screenScale, -2.0, 2.0));
-            features.pivotOffsetYNorm = static_cast<float>(std::clamp((d.pivotY - predCy) / screenScale, -2.0, 2.0));
-            features.relaxedGate = relaxedForLocked ? 1.0f : 0.0f;
-            return features;
-        };
-
-    auto computeAssociationBreakdown = [&](const TrackState& t, const DetectionCandidate& d, bool relaxedForLocked) -> AssociationBreakdown
-        {
-            AssociationBreakdown breakdown;
             const bool sameClass = (d.classId == t.classId);
+            bool classSwappedWithinTarget = false;
             double classPenalty = 0.0;
             if (!sameClass)
             {
                 const bool allowHeadBodySwap =
                     !disableHeadshot &&
-                    ((t.classId == config.class_player && d.classId == config.class_head) ||
-                     (t.classId == config.class_head && d.classId == config.class_player));
+                    ((t.classId == classPlayer && d.classId == classHead) ||
+                     (t.classId == classHead && d.classId == classPlayer));
                 if (!allowHeadBodySwap)
-                    return breakdown;
+                    return std::numeric_limits<double>::infinity();
 
+                classSwappedWithinTarget = true;
                 classPenalty = 0.18;
             }
 
@@ -465,7 +389,11 @@ void MultiTargetTracker::update(
 
             const double detCx = d.box.x + d.box.width * 0.5;
             const double detCy = d.box.y + d.box.height * 0.5;
-            const double dist = std::hypot(detCx - predCx, detCy - predCy);
+            const double boxDist = std::hypot(detCx - predCx, detCy - predCy);
+            const double predPivotX = t.pivotX + t.velocity.x * dt;
+            const double predPivotY = t.pivotY + t.velocity.y * dt;
+            const double pivotDist = std::hypot(d.pivotX - predPivotX, d.pivotY - predPivotY);
+            const double dist = classSwappedWithinTarget ? pivotDist : std::min(boxDist, pivotDist);
 
             const double diag = std::hypot(static_cast<double>(t.box.width), static_cast<double>(t.box.height));
             const double speed = std::hypot(t.velocity.x, t.velocity.y);
@@ -477,90 +405,12 @@ void MultiTargetTracker::update(
                 maxDist *= 1.6;
 
             if (dist > maxDist)
-                return breakdown;
+                return std::numeric_limits<double>::infinity();
 
             const double overlap = iou(predBox, d.box);
             const double missPenalty = t.missed * 0.025;
             const double hitBonus = std::min(6, t.hits) * 0.01;
-
-            const float prevCx = t.box.x + t.box.width * 0.5f;
-            const float prevCy = t.box.y + t.box.height * 0.5f;
-            const double moveX = detCx - prevCx;
-            const double moveY = detCy - prevCy;
-            const double moveMag = std::hypot(moveX, moveY);
-            double headingAlignment = 0.0;
-            double headingPenalty = 0.0;
-            if (speed > 80.0 && moveMag > std::max(3.0, diag * 0.08))
-            {
-                headingAlignment = std::clamp(
-                    (moveX * t.velocity.x + moveY * t.velocity.y) / (moveMag * speed),
-                    -1.0,
-                    1.0
-                );
-                headingPenalty = std::max(0.0, 0.10 - headingAlignment) * ((t.missed > 0) ? 0.08 : 0.04);
-                if (relaxedForLocked)
-                    headingPenalty *= 0.55;
-            }
-
-            breakdown.accepted = true;
-            breakdown.distancePx = dist;
-            breakdown.overlap = overlap;
-            breakdown.headingAlignment = headingAlignment;
-            breakdown.score = (dist / maxDist) +
-                (1.0 - overlap) * 0.30 +
-                classPenalty +
-                missPenalty +
-                headingPenalty -
-                hitBonus -
-                std::clamp(static_cast<double>(d.confidence), 0.0, 1.0) * 0.04;
-
-            if (config.neural_tracker_enabled)
-            {
-                breakdown.neuralFeatures = buildNeuralFeatures(
-                    t,
-                    d,
-                    predBox,
-                    dt,
-                    dist,
-                    maxDist,
-                    overlap,
-                    headingAlignment,
-                    true,
-                    relaxedForLocked);
-
-                if (auto tracker = getNeuralTracker())
-                {
-                    const aim::neural::NeuralTrackerResult neuralResult = tracker->score(breakdown.neuralFeatures);
-                    if (neuralResult.valid)
-                    {
-                        breakdown.neuralScore = neuralResult.neuralScore;
-                        breakdown.neuralEvaluated = true;
-                        const double blend = std::clamp(static_cast<double>(config.neural_tracker_blend), 0.0, 1.0);
-                        breakdown.neuralBonus = std::clamp((breakdown.neuralScore - 0.5) * 0.40 * blend, -0.20, 0.20);
-                        breakdown.score -= breakdown.neuralBonus;
-                    }
-                }
-
-                if (config.neural_tracker_log_enabled)
-                {
-                    aim::neural::logNeuralTrackerAssociation(
-                        config.neural_tracker_log_path,
-                        breakdown.neuralFeatures,
-                        static_cast<float>(breakdown.neuralScore),
-                        static_cast<float>(breakdown.score + breakdown.neuralBonus),
-                        static_cast<float>(breakdown.score),
-                        true,
-                        false);
-                }
-            }
-
-            return breakdown;
-        };
-
-    auto computeMatchScore = [&](const TrackState& t, const DetectionCandidate& d, bool relaxedForLocked) -> double
-        {
-            const AssociationBreakdown breakdown = computeAssociationBreakdown(t, d, relaxedForLocked);
-            return breakdown.accepted ? breakdown.score : std::numeric_limits<double>::infinity();
+            return (dist / maxDist) + (1.0 - overlap) * 0.30 + classPenalty + missPenalty - hitBonus;
         };
 
     auto tryAssignTrack = [&](int trackIndex, bool relaxedForLocked)
@@ -648,19 +498,18 @@ void MultiTargetTracker::update(
         if (di >= 0)
         {
             const auto& d = dets[di];
-            const AssociationBreakdown scoreBreakdown = computeAssociationBreakdown(t, d, t.id == lockedTrackId_);
             const double dt = std::clamp(
                 std::chrono::duration<double>(now - t.lastUpdate).count(),
                 1e-4, 0.2
             );
 
-            const float oldCx = t.box.x + t.box.width * 0.5f;
-            const float oldCy = t.box.y + t.box.height * 0.5f;
-            const float newCx = d.box.x + d.box.width * 0.5f;
-            const float newCy = d.box.y + d.box.height * 0.5f;
+            const float oldX = static_cast<float>(t.pivotX);
+            const float oldY = static_cast<float>(t.pivotY);
+            const float newX = static_cast<float>(d.pivotX);
+            const float newY = static_cast<float>(d.pivotY);
             const cv::Point2f rawVel(
-                static_cast<float>((newCx - oldCx) / dt),
-                static_cast<float>((newCy - oldCy) / dt)
+                static_cast<float>((newX - oldX) / dt),
+                static_cast<float>((newY - oldY) / dt)
             );
 
             cv::Point2f clampedRawVel = rawVel;
@@ -678,25 +527,6 @@ void MultiTargetTracker::update(
             t.pivotX = d.pivotX;
             t.pivotY = d.pivotY;
             t.classId = d.classId;
-            t.confidence = t.confidence * 0.35f + d.confidence * 0.65f;
-            t.lastAssociationScore = scoreBreakdown.score;
-            t.lastAssociationDistancePx = scoreBreakdown.distancePx;
-            t.lastAssociationIou = scoreBreakdown.overlap;
-            t.lastHeadingAlignment = scoreBreakdown.headingAlignment;
-            t.lastNeuralScore = scoreBreakdown.neuralScore;
-            t.lastNeuralBonus = scoreBreakdown.neuralBonus;
-            t.lastNeuralEvaluated = scoreBreakdown.neuralEvaluated;
-            if (config.neural_tracker_log_enabled && config.neural_tracker_enabled)
-            {
-                aim::neural::logNeuralTrackerAssociation(
-                    config.neural_tracker_log_path,
-                    scoreBreakdown.neuralFeatures,
-                    static_cast<float>(scoreBreakdown.neuralScore),
-                    static_cast<float>(scoreBreakdown.score + scoreBreakdown.neuralBonus),
-                    static_cast<float>(scoreBreakdown.score),
-                    scoreBreakdown.accepted,
-                    true);
-            }
             t.hits += 1;
             t.missed = 0;
             t.observedThisFrame = true;
@@ -714,14 +544,6 @@ void MultiTargetTracker::update(
             t.pivotY += t.velocity.y * dt;
             const float decay = (t.id == lockedTrackId_) ? 0.90f : 0.84f;
             t.velocity *= decay;
-            t.confidence *= (t.id == lockedTrackId_) ? 0.88f : 0.80f;
-            t.lastAssociationScore = std::numeric_limits<double>::infinity();
-            t.lastAssociationDistancePx = 0.0;
-            t.lastAssociationIou = 0.0;
-            t.lastHeadingAlignment = 0.0;
-            t.lastNeuralScore = 0.5;
-            t.lastNeuralBonus = 0.0;
-            t.lastNeuralEvaluated = false;
             t.missed += 1;
             t.observedThisFrame = false;
             t.lastUpdate = now;
@@ -740,17 +562,9 @@ void MultiTargetTracker::update(
         t.classId = d.classId;
         t.hits = 1;
         t.missed = 0;
-        t.confidence = d.confidence;
         t.observedThisFrame = true;
         t.pivotX = d.pivotX;
         t.pivotY = d.pivotY;
-        t.lastAssociationScore = 0.0;
-        t.lastAssociationDistancePx = 0.0;
-        t.lastAssociationIou = 1.0;
-        t.lastHeadingAlignment = 1.0;
-        t.lastNeuralScore = 0.5;
-        t.lastNeuralBonus = 0.0;
-        t.lastNeuralEvaluated = false;
         t.lastUpdate = now;
         tracks_.push_back(t);
     }
@@ -794,12 +608,8 @@ bool MultiTargetTracker::getLockedTarget(LockedTargetInfo& out) const
         static_cast<int>(std::lround(t.box.height)),
         t.classId,
         t.pivotX,
-        t.pivotY,
-        std::clamp(static_cast<double>(t.confidence), 0.0, 1.0),
-        t.id
+        t.pivotY
     );
-    out.target.smoothX = t.pivotX;
-    out.target.smoothY = t.pivotY;
     return true;
 }
 
@@ -827,18 +637,9 @@ std::vector<TrackDebugInfo> MultiTargetTracker::getDebugTracks() const
         d.velocityX = t.velocity.x;
         d.velocityY = t.velocity.y;
         d.lastUpdate = t.lastUpdate;
-        d.confidence = t.confidence;
-        d.hits = t.hits;
         d.observedThisFrame = t.observedThisFrame;
         d.missedFrames = t.missed;
         d.isLocked = (t.id == lockedTrackId_);
-        d.lastAssociationScore = t.lastAssociationScore;
-        d.lastAssociationDistancePx = t.lastAssociationDistancePx;
-        d.lastAssociationIou = t.lastAssociationIou;
-        d.lastHeadingAlignment = t.lastHeadingAlignment;
-        d.lastNeuralScore = t.lastNeuralScore;
-        d.lastNeuralBonus = t.lastNeuralBonus;
-        d.lastNeuralEvaluated = t.lastNeuralEvaluated;
         out.push_back(d);
     }
 

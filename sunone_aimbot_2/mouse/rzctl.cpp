@@ -1,15 +1,11 @@
-#define WIN32_LEAN_AND_MEAN
-#define _WINSOCKAPI_
-#include <Windows.h>
-
 #include "rzctl.h"
 
 #include <iostream>
+#include <string>
 #include <vector>
 
 namespace
 {
-constexpr wchar_t RazerControlDllName[] = L"chroma_lighting.dll";
 constexpr int RZ_LEFT_DOWN = 1;
 constexpr int RZ_LEFT_UP = 2;
 constexpr int RZ_RIGHT_DOWN = 4;
@@ -31,16 +27,13 @@ std::filesystem::path RzctlMouse::resolveDllPath()
     std::vector<std::filesystem::path> candidates;
     if (!exeDir.empty())
     {
-        candidates.push_back(exeDir / RazerControlDllName);
-        candidates.push_back(exeDir / L"controls" / RazerControlDllName);
-        candidates.push_back(exeDir / L"modules" / L"razer-controls" / L"x64" / L"Release" / RazerControlDllName);
+        candidates.push_back(exeDir / L"rzctl.dll");
+        candidates.push_back(exeDir / L"controls" / L"rzctl.dll");
     }
-
     if (!ec)
     {
-        candidates.push_back(cwd / RazerControlDllName);
-        candidates.push_back(cwd / L"controls" / RazerControlDllName);
-        candidates.push_back(cwd / L"modules" / L"razer-controls" / L"x64" / L"Release" / RazerControlDllName);
+        candidates.push_back(cwd / L"rzctl.dll");
+        candidates.push_back(cwd / L"controls" / L"rzctl.dll");
     }
 
     for (const auto& candidate : candidates)
@@ -49,7 +42,7 @@ std::filesystem::path RzctlMouse::resolveDllPath()
             return candidate;
     }
 
-    return exeDir.empty() ? std::filesystem::path(RazerControlDllName) : exeDir / RazerControlDllName;
+    return exeDir.empty() ? std::filesystem::path(L"rzctl.dll") : exeDir / L"rzctl.dll";
 }
 
 int RzctlMouse::downFlagForKey(int key)
@@ -76,7 +69,7 @@ RzctlMouse::RzctlMouse()
     rzctl = LoadLibraryW(dllPath.wstring().c_str());
     if (rzctl == nullptr)
     {
-        std::wcerr << L"[Razer] Failed to load chroma_lighting.dll from " << dllPath.wstring() << std::endl;
+        std::wcerr << L"[Razer] Failed to load rzctl.dll from " << dllPath.wstring() << std::endl;
         return;
     }
 
@@ -89,30 +82,30 @@ RzctlMouse::RzctlMouse()
 
     if (!init || (!mouseMoveStatus && !mouseMove) || (!mouseClickStatus && !mouseClick) || !keyboardInput)
     {
-        std::cerr << "[Razer] chroma_lighting.dll is missing one or more required exports." << std::endl;
-        mouse_close();
+        std::cerr << "[Razer] rzctl.dll is missing one or more required exports." << std::endl;
         return;
     }
 
-    rzctlOk = init() == TRUE;
+    rzctlOk = init();
     if (!rzctlOk)
         std::cerr << "[Razer] RZCONTROL device initialization failed." << std::endl;
 }
 
 RzctlMouse::~RzctlMouse()
 {
-    mouse_close();
+    if (rzctl != nullptr)
+    {
+        FreeLibrary(rzctl);
+        rzctl = nullptr;
+    }
 }
 
 bool RzctlMouse::mouse_xy(int x, int y)
 {
-    if (!rzctlOk)
-        return false;
-
-    if (mouseMoveStatus)
+    if (rzctlOk && mouseMoveStatus)
         return mouseMoveStatus(x, y, TRUE) == TRUE;
 
-    if (mouseMove)
+    if (rzctlOk && mouseMove)
     {
         mouseMove(x, y, true);
         return true;
@@ -123,16 +116,12 @@ bool RzctlMouse::mouse_xy(int x, int y)
 
 bool RzctlMouse::mouse_down(int key)
 {
-    if (!rzctlOk)
-        return false;
+    if (rzctlOk && mouseClickStatus)
+        return mouseClickStatus(downFlagForKey(key)) == TRUE;
 
-    const int flag = downFlagForKey(key);
-    if (mouseClickStatus)
-        return mouseClickStatus(flag) == TRUE;
-
-    if (mouseClick)
+    if (rzctlOk && mouseClick)
     {
-        mouseClick(flag);
+        mouseClick(downFlagForKey(key));
         return true;
     }
 
@@ -141,35 +130,19 @@ bool RzctlMouse::mouse_down(int key)
 
 bool RzctlMouse::mouse_up(int key)
 {
-    if (!rzctlOk)
-        return false;
+    if (rzctlOk && mouseClickStatus)
+        return mouseClickStatus(upFlagForKey(key)) == TRUE;
 
-    const int flag = upFlagForKey(key);
-    if (mouseClickStatus)
-        return mouseClickStatus(flag) == TRUE;
-
-    if (mouseClick)
+    if (rzctlOk && mouseClick)
     {
-        mouseClick(flag);
+        mouseClick(upFlagForKey(key));
         return true;
     }
 
     return false;
 }
 
-void RzctlMouse::mouse_close()
+bool RzctlMouse::mouse_close()
 {
-    rzctlOk = false;
-    init = nullptr;
-    mouseMove = nullptr;
-    mouseMoveStatus = nullptr;
-    mouseClick = nullptr;
-    mouseClickStatus = nullptr;
-    keyboardInput = nullptr;
-
-    if (rzctl != nullptr)
-    {
-        FreeLibrary(rzctl);
-        rzctl = nullptr;
-    }
+    return rzctlOk;
 }

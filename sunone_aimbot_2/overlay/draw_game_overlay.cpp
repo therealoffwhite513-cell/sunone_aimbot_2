@@ -17,9 +17,27 @@
 
 extern std::string g_iconLastError;
 
-void draw_game_overlay_settings()
+namespace
 {
-    if (OverlayUI::BeginSection("General", "game_overlay_section_general"))
+enum class GameOverlaySettingsPage
+{
+    All,
+    General,
+    Visuals,
+    Icon,
+    Simulation
+};
+
+bool shouldDrawGameOverlayPage(GameOverlaySettingsPage current, GameOverlaySettingsPage wanted)
+{
+    return current == GameOverlaySettingsPage::All || current == wanted;
+}
+}
+
+static void draw_game_overlay_page(GameOverlaySettingsPage page)
+{
+    if (shouldDrawGameOverlayPage(page, GameOverlaySettingsPage::General) &&
+        OverlayUI::BeginSection("General", "game_overlay_section_general"))
     {
         if (ImGui::Checkbox("Enable", &config.game_overlay_enabled))
             OverlayConfig_MarkDirty();
@@ -46,7 +64,8 @@ void draw_game_overlay_settings()
         OverlayUI::EndSection();
     }
 
-    if (OverlayUI::BeginSection("Box Color", "game_overlay_section_box_color"))
+    if (shouldDrawGameOverlayPage(page, GameOverlaySettingsPage::Visuals) &&
+        OverlayUI::BeginSection("Box Color", "game_overlay_section_box_color"))
     {
         bool colorChanged = false;
 
@@ -80,7 +99,8 @@ void draw_game_overlay_settings()
         OverlayUI::EndSection();
     }
 
-    if (OverlayUI::BeginSection("Capture Frame", "game_overlay_section_capture_frame"))
+    if (shouldDrawGameOverlayPage(page, GameOverlaySettingsPage::Visuals) &&
+        OverlayUI::BeginSection("Capture Frame", "game_overlay_section_capture_frame"))
     {
         if (ImGui::Checkbox("Draw Capture Frame", &config.game_overlay_draw_frame))
             OverlayConfig_MarkDirty();
@@ -120,7 +140,8 @@ void draw_game_overlay_settings()
         OverlayUI::EndSection();
     }
 
-    if (OverlayUI::BeginSection("Future Point Style", "game_overlay_section_future_style"))
+    if (shouldDrawGameOverlayPage(page, GameOverlaySettingsPage::Visuals) &&
+        OverlayUI::BeginSection("Future Point Style", "game_overlay_section_future_style"))
     {
         ImGui::SliderFloat("Point Radius", &config.game_overlay_future_point_radius, 1.0f, 20.0f, "%.1f");
         if (ImGui::IsItemDeactivatedAfterEdit())
@@ -133,7 +154,8 @@ void draw_game_overlay_settings()
         OverlayUI::EndSection();
     }
 
-    if (OverlayUI::BeginSection("Icon Overlay", "game_overlay_section_icon"))
+    if (shouldDrawGameOverlayPage(page, GameOverlaySettingsPage::Icon) &&
+        OverlayUI::BeginSection("Icon Overlay", "game_overlay_section_icon"))
     {
         if (ImGui::Checkbox("Enable Icon Overlay", &config.game_overlay_icon_enabled))
             OverlayConfig_MarkDirty();
@@ -230,7 +252,8 @@ void draw_game_overlay_settings()
         OverlayUI::EndSection();
     }
 
-    if (OverlayUI::BeginSection("Aim Simulation", "game_overlay_section_aim_sim"))
+    if (shouldDrawGameOverlayPage(page, GameOverlaySettingsPage::Simulation) &&
+        OverlayUI::BeginSection("Aim Simulation", "game_overlay_section_aim_sim"))
     {
         if (ImGui::Checkbox("Enable Aim Simulation Window", &config.aim_sim_enabled))
             OverlayConfig_MarkDirty();
@@ -405,7 +428,7 @@ void draw_game_overlay_settings()
         OverlayUI::EndSection();
     }
 
-    if (!g_iconLastError.empty())
+    if (shouldDrawGameOverlayPage(page, GameOverlaySettingsPage::Icon) && !g_iconLastError.empty())
     {
         if (OverlayUI::BeginSection("Errors", "game_overlay_section_errors"))
         {
@@ -416,4 +439,29 @@ void draw_game_overlay_settings()
         }
     }
 
+}
+
+void draw_game_overlay_settings()
+{
+    draw_game_overlay_page(GameOverlaySettingsPage::All);
+}
+
+void draw_game_overlay_general()
+{
+    draw_game_overlay_page(GameOverlaySettingsPage::General);
+}
+
+void draw_game_overlay_visuals()
+{
+    draw_game_overlay_page(GameOverlaySettingsPage::Visuals);
+}
+
+void draw_game_overlay_icon()
+{
+    draw_game_overlay_page(GameOverlaySettingsPage::Icon);
+}
+
+void draw_aim_simulation_settings()
+{
+    draw_game_overlay_page(GameOverlaySettingsPage::Simulation);
 }

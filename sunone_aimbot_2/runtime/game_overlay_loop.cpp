@@ -87,6 +87,39 @@ void resetGameOverlayIconCache()
     g_iconImageId = 0;
     g_iconLastError.clear();
 }
+
+float rectIou(const cv::Rect& a, const cv::Rect& b)
+{
+    const cv::Rect intersection = a & b;
+    if (intersection.width <= 0 || intersection.height <= 0)
+        return 0.0f;
+
+    const float intersectionArea = static_cast<float>(intersection.area());
+    const float unionArea = static_cast<float>(a.area() + b.area()) - intersectionArea;
+    if (unionArea <= 1e-6f)
+        return 0.0f;
+
+    return intersectionArea / unionArea;
+}
+
+bool detectionRepresentedByTrack(
+    const cv::Rect& box,
+    int classId,
+    const std::vector<TrackDebugInfo>& tracks)
+{
+    constexpr float kSameClassIouThreshold = 0.35f;
+
+    for (const auto& t : tracks)
+    {
+        if (t.classId != classId)
+            continue;
+
+        if (rectIou(box, t.box) >= kSameClassIouThreshold)
+            return true;
+    }
+
+    return false;
+}
 }
 static void draw_target_correction_demo_game_overlay(Game_overlay* overlay, float centerX, float centerY)
 {
@@ -1715,6 +1748,19 @@ void gameOverlayRenderLoop()
                         continue;
                     gameOverlayPtr->AddRect(*rect, col, thickness);
                 }
+
+                for (size_t i = 0; i < boxesCopy.size(); ++i)
+                {
+                    const int cls = (i < classesCopy.size()) ? classesCopy[i] : -1;
+                    if (detectionRepresentedByTrack(boxesCopy[i], cls, trackDebugCopy))
+                        continue;
+
+                    auto rect = projectDetectionBox(boxesCopy[i]);
+                    if (!rect)
+                        continue;
+
+                    gameOverlayPtr->AddRect(*rect, col, thickness);
+                }
             }
             else
             {
@@ -1742,15 +1788,6 @@ void gameOverlayRenderLoop()
                     label += L" *";
                 if (!t.observedThisFrame)
                     label += L" m" + std::to_wstring(t.missedFrames);
-                if (config.neural_tracker_debug_enabled)
-                {
-                    wchar_t neuralLabel[64] = {};
-                    if (t.lastNeuralEvaluated)
-                        swprintf_s(neuralLabel, L" n%.2f b%.2f", t.lastNeuralScore, t.lastNeuralBonus);
-                    else
-                        swprintf_s(neuralLabel, L" c%.2f", static_cast<double>(t.confidence));
-                    label += neuralLabel;
-                }
 
                 const uint32_t textCol =
                     (t.trackId == lockedTrackId || t.isLocked)

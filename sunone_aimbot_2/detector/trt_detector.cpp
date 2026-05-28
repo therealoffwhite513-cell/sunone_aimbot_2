@@ -419,10 +419,10 @@ void TrtDetector::initialize(const std::string& modelFile)
     }
     inputName = inputNames[0];
 
-    nvinfer1::Dims inputDims = context->getTensorShape(inputName.c_str());
+    nvinfer1::Dims modelInputDims = engine->getTensorShape(inputName.c_str());
     bool isStatic = true;
-    for (int i = 0; i < inputDims.nbDims; ++i)
-        if (inputDims.d[i] <= 0) isStatic = false;
+    for (int i = 0; i < modelInputDims.nbDims; ++i)
+        if (modelInputDims.d[i] <= 0) isStatic = false;
 
     if (isStatic != config.fixed_input_size)
     {
@@ -432,6 +432,7 @@ void TrtDetector::initialize(const std::string& modelFile)
     }
 
     const int target = config.detection_resolution;
+    nvinfer1::Dims inputDims = modelInputDims;
     if (!isStatic)
     {
         nvinfer1::Dims4 newShape{ 1, 3, target, target };
@@ -441,6 +442,10 @@ void TrtDetector::initialize(const std::string& modelFile)
             std::cerr << "[Detector] Failed to set input dimensions" << std::endl;
             return;
         }
+        inputDims = context->getTensorShape(inputName.c_str());
+    }
+    else
+    {
         inputDims = context->getTensorShape(inputName.c_str());
     }
 
@@ -979,25 +984,26 @@ void TrtDetector::preProcess(const cv::cuda::GpuMat& frame)
     if (c != 3)
         return;
 
-    cv::cuda::GpuMat bgrFrame;
+    cv::cuda::GpuMat rgbFrame;
     switch (frame.channels())
     {
     case 4:
-        cv::cuda::cvtColor(frame, gpuFrameBuffer, cv::COLOR_BGRA2BGR, 0, cvStream);
-        bgrFrame = gpuFrameBuffer;
+        cv::cuda::cvtColor(frame, gpuFrameBuffer, cv::COLOR_BGRA2RGB, 0, cvStream);
+        rgbFrame = gpuFrameBuffer;
         break;
     case 1:
-        cv::cuda::cvtColor(frame, gpuFrameBuffer, cv::COLOR_GRAY2BGR, 0, cvStream);
-        bgrFrame = gpuFrameBuffer;
+        cv::cuda::cvtColor(frame, gpuFrameBuffer, cv::COLOR_GRAY2RGB, 0, cvStream);
+        rgbFrame = gpuFrameBuffer;
         break;
     case 3:
-        bgrFrame = frame;
+        cv::cuda::cvtColor(frame, gpuFrameBuffer, cv::COLOR_BGR2RGB, 0, cvStream);
+        rgbFrame = gpuFrameBuffer;
         break;
     default:
         return;
     }
 
-    cv::cuda::resize(bgrFrame, gpuResizedBuffer, cv::Size(w, h), 0, 0, cv::INTER_LINEAR, cvStream);
+    cv::cuda::resize(rgbFrame, gpuResizedBuffer, cv::Size(w, h), 0, 0, cv::INTER_LINEAR, cvStream);
     gpuResizedBuffer.convertTo(gpuFloatBuffer, CV_32FC3, 1.0 / 255.0, 0.0, cvStream);
 
     launch_hwc_to_chw_norm(

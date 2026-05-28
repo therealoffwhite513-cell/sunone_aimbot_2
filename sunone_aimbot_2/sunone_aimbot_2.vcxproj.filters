@@ -9,11 +9,13 @@
     <ClCompile Include="mouse\hid.c" />
     <ClCompile Include="mouse\KmboxAConnection.cpp" />
     <ClCompile Include="mouse\kmboxA.cpp" />
+    <ClCompile Include="mouse\MouseInput.cpp" />
     <ClCompile Include="mouse\mouse.cpp" />
+    <ClCompile Include="mouse\rzctl.cpp" />
+    <ClCompile Include="mouse\Teensy41RawHid.cpp" />
     <ClCompile Include="mouse\Arduino.cpp" />
     <ClCompile Include="mouse\RP2350.cpp" />
     <ClCompile Include="mouse\AimbotTarget.cpp" />
-    <ClCompile Include="neural\NeuralTracker.cpp" />
     <ClCompile Include="detector\trt_detector.cpp" />
     <ClCompile Include="tensorrt\nvinf.cpp" />
     <ClCompile Include="keyboard\keyboard_listener.cpp" />
@@ -37,7 +39,6 @@
     <ClCompile Include="overlay\draw_buttons.cpp" />
     <ClCompile Include="overlay\draw_overlay.cpp" />
     <ClCompile Include="overlay\draw_debug.cpp" />
-    <ClCompile Include="overlay\draw_neural.cpp" />
     <ClCompile Include="detector\dml_detector.cpp" />
     <ClCompile Include="overlay\draw_stats.cpp" />
     <ClCompile Include="detector\detection_buffer.cpp" />
@@ -81,11 +82,13 @@
     <ClInclude Include="mouse\hidapi.h" />
     <ClInclude Include="mouse\KmboxAConnection.h" />
     <ClInclude Include="mouse\kmboxA.h" />
+    <ClInclude Include="mouse\MouseInput.h" />
     <ClInclude Include="mouse\mouse.h" />
+    <ClInclude Include="mouse\rzctl.h" />
+    <ClInclude Include="mouse\Teensy41RawHid.h" />
     <ClInclude Include="mouse\Arduino.h" />
     <ClInclude Include="mouse\RP2350.h" />
     <ClInclude Include="mouse\AimbotTarget.h" />
-    <ClInclude Include="neural\NeuralTracker.h" />
     <ClInclude Include="detector\trt_detector.h" />
     <ClInclude Include="tensorrt\nvinf.h" />
     <ClInclude Include="keyboard\keyboard_listener.h" />
@@ -128,6 +131,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="rzctl.dll" />
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest" />

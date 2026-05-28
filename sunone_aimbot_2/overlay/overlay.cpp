@@ -209,18 +209,18 @@ static inline ImVec4 RGBA(int r, int g, int b, int a = 255)
     return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f);
 }
 
-static void ApplyTheme_RoseDark()
+static void ApplyTheme_CompactDark()
 {
     ImGuiStyle& style = ImGui::GetStyle();
     style.Alpha = 1.0f;
 
-    style.WindowRounding = 0.0f;
-    style.ChildRounding = 0.0f;
-    style.PopupRounding = 0.0f;
-    style.FrameRounding = 0.0f;
-    style.TabRounding = 0.0f;
-    style.ScrollbarRounding = 0.0f;
-    style.GrabRounding = 0.0f;
+    style.WindowRounding = 6.0f;
+    style.ChildRounding = 5.0f;
+    style.PopupRounding = 5.0f;
+    style.FrameRounding = 4.0f;
+    style.TabRounding = 4.0f;
+    style.ScrollbarRounding = 4.0f;
+    style.GrabRounding = 4.0f;
 
     style.WindowBorderSize = 1.0f;
     style.ChildBorderSize = 1.0f;
@@ -228,26 +228,29 @@ static void ApplyTheme_RoseDark()
     style.PopupBorderSize = 1.0f;
     style.TabBorderSize = 1.0f;
 
-    style.WindowPadding = ImVec2(9.0f, 8.0f);
-    style.FramePadding = ImVec2(6.0f, 3.0f);
-    style.ItemSpacing = ImVec2(7.0f, 5.0f);
+    style.WindowPadding = ImVec2(10.0f, 9.0f);
+    style.FramePadding = ImVec2(7.0f, 4.0f);
+    style.ItemSpacing = ImVec2(8.0f, 6.0f);
     style.ItemInnerSpacing = ImVec2(6.0f, 4.0f);
     style.CellPadding = ImVec2(6.0f, 5.0f);
     style.ScrollbarSize = 10.0f;
     style.GrabMinSize = 10.0f;
-    style.IndentSpacing = 12.0f;
+    style.IndentSpacing = 14.0f;
 
     ImVec4* c = style.Colors;
 
-    const ImVec4 bg0 = RGBA(4, 4, 4, 250);
-    const ImVec4 bg1 = RGBA(10, 10, 10, 250);
-    const ImVec4 bg2 = RGBA(16, 16, 16, 245);
-    const ImVec4 stroke = RGBA(255, 255, 255, 56);
-    const ImVec4 strokeHi = RGBA(255, 255, 255, 92);
+    const ImVec4 bg0 = RGBA(9, 10, 12, 250);
+    const ImVec4 bg1 = RGBA(15, 17, 21, 250);
+    const ImVec4 bg2 = RGBA(23, 26, 31, 246);
+    const ImVec4 bg3 = RGBA(31, 35, 41, 248);
+    const ImVec4 stroke = RGBA(76, 89, 101, 132);
+    const ImVec4 strokeHi = RGBA(62, 185, 166, 180);
+    const ImVec4 accent = RGBA(48, 190, 171, 235);
+    const ImVec4 accentHi = RGBA(77, 215, 194, 255);
+    const ImVec4 accentSoft = RGBA(34, 130, 126, 108);
 
-    const ImVec4 text = RGBA(232, 237, 245, 255);
-    const ImVec4 textDim = RGBA(143, 160, 182, 255);
-    const ImVec4 bright = RGBA(245, 245, 245, 255);
+    const ImVec4 text = RGBA(231, 236, 242, 255);
+    const ImVec4 textDim = RGBA(148, 160, 174, 255);
 
     c[ImGuiCol_Text] = text;
     c[ImGuiCol_TextDisabled] = textDim;
@@ -260,60 +263,60 @@ static void ApplyTheme_RoseDark()
     c[ImGuiCol_BorderShadow] = RGBA(0, 0, 0, 0);
 
     c[ImGuiCol_FrameBg] = bg2;
-    c[ImGuiCol_FrameBgHovered] = RGBA(24, 24, 24, 250);
-    c[ImGuiCol_FrameBgActive] = RGBA(31, 31, 31, 252);
+    c[ImGuiCol_FrameBgHovered] = bg3;
+    c[ImGuiCol_FrameBgActive] = RGBA(38, 44, 51, 252);
 
     c[ImGuiCol_TitleBg] = bg1;
     c[ImGuiCol_TitleBgActive] = bg1;
     c[ImGuiCol_TitleBgCollapsed] = bg1;
     c[ImGuiCol_MenuBarBg] = bg0;
 
-    c[ImGuiCol_ScrollbarBg] = RGBA(0, 0, 0, 95);
-    c[ImGuiCol_ScrollbarGrab] = RGBA(96, 96, 96, 170);
-    c[ImGuiCol_ScrollbarGrabHovered] = RGBA(122, 122, 122, 210);
-    c[ImGuiCol_ScrollbarGrabActive] = RGBA(145, 145, 145, 232);
+    c[ImGuiCol_ScrollbarBg] = RGBA(7, 8, 10, 120);
+    c[ImGuiCol_ScrollbarGrab] = RGBA(79, 91, 104, 178);
+    c[ImGuiCol_ScrollbarGrabHovered] = RGBA(95, 109, 122, 220);
+    c[ImGuiCol_ScrollbarGrabActive] = accent;
 
-    c[ImGuiCol_CheckMark] = bright;
-    c[ImGuiCol_SliderGrab] = RGBA(236, 236, 236, 236);
-    c[ImGuiCol_SliderGrabActive] = bright;
+    c[ImGuiCol_CheckMark] = accentHi;
+    c[ImGuiCol_SliderGrab] = accent;
+    c[ImGuiCol_SliderGrabActive] = accentHi;
 
-    c[ImGuiCol_Button] = RGBA(14, 14, 14, 246);
-    c[ImGuiCol_ButtonHovered] = RGBA(20, 20, 20, 250);
-    c[ImGuiCol_ButtonActive] = RGBA(28, 28, 28, 252);
+    c[ImGuiCol_Button] = RGBA(22, 26, 31, 246);
+    c[ImGuiCol_ButtonHovered] = RGBA(31, 38, 44, 250);
+    c[ImGuiCol_ButtonActive] = RGBA(40, 53, 58, 252);
 
-    c[ImGuiCol_Header] = RGBA(18, 18, 18, 244);
-    c[ImGuiCol_HeaderHovered] = RGBA(24, 24, 24, 250);
-    c[ImGuiCol_HeaderActive] = RGBA(32, 32, 32, 252);
+    c[ImGuiCol_Header] = RGBA(21, 25, 30, 244);
+    c[ImGuiCol_HeaderHovered] = RGBA(29, 36, 42, 250);
+    c[ImGuiCol_HeaderActive] = accentSoft;
 
     c[ImGuiCol_Separator] = stroke;
     c[ImGuiCol_SeparatorHovered] = strokeHi;
-    c[ImGuiCol_SeparatorActive] = RGBA(168, 168, 168, 228);
+    c[ImGuiCol_SeparatorActive] = accentHi;
 
-    c[ImGuiCol_Tab] = RGBA(14, 14, 14, 248);
-    c[ImGuiCol_TabHovered] = RGBA(22, 22, 22, 250);
-    c[ImGuiCol_TabActive] = RGBA(30, 30, 30, 252);
-    c[ImGuiCol_TabUnfocused] = RGBA(12, 12, 12, 240);
-    c[ImGuiCol_TabUnfocusedActive] = RGBA(22, 22, 22, 248);
+    c[ImGuiCol_Tab] = RGBA(20, 24, 29, 248);
+    c[ImGuiCol_TabHovered] = RGBA(30, 41, 47, 250);
+    c[ImGuiCol_TabActive] = RGBA(38, 52, 58, 252);
+    c[ImGuiCol_TabUnfocused] = RGBA(15, 18, 22, 240);
+    c[ImGuiCol_TabUnfocusedActive] = RGBA(25, 32, 38, 248);
 
     c[ImGuiCol_ResizeGrip] = RGBA(0, 0, 0, 0);
     c[ImGuiCol_ResizeGripHovered] = RGBA(0, 0, 0, 0);
     c[ImGuiCol_ResizeGripActive] = RGBA(0, 0, 0, 0);
 
-    c[ImGuiCol_PlotLines] = RGBA(216, 216, 216, 255);
-    c[ImGuiCol_PlotHistogram] = RGBA(216, 216, 216, 255);
+    c[ImGuiCol_PlotLines] = RGBA(96, 205, 185, 255);
+    c[ImGuiCol_PlotHistogram] = RGBA(228, 178, 91, 255);
 
     c[ImGuiCol_TableHeaderBg] = bg1;
     c[ImGuiCol_TableBorderStrong] = stroke;
     c[ImGuiCol_TableBorderLight] = RGBA(0, 0, 0, 0);
     c[ImGuiCol_TableRowBg] = RGBA(0, 0, 0, 0);
-    c[ImGuiCol_TableRowBgAlt] = RGBA(255, 255, 255, 6);
+    c[ImGuiCol_TableRowBgAlt] = RGBA(255, 255, 255, 8);
 
-    c[ImGuiCol_NavHighlight] = RGBA(255, 255, 255, 110);
-    c[ImGuiCol_NavWindowingHighlight] = RGBA(255, 255, 255, 90);
+    c[ImGuiCol_NavHighlight] = accent;
+    c[ImGuiCol_NavWindowingHighlight] = accentSoft;
     c[ImGuiCol_NavWindowingDimBg] = RGBA(0, 0, 0, 110);
 
-    c[ImGuiCol_TextSelectedBg] = RGBA(255, 255, 255, 56);
-    c[ImGuiCol_DragDropTarget] = RGBA(255, 255, 255, 188);
+    c[ImGuiCol_TextSelectedBg] = RGBA(48, 190, 171, 72);
+    c[ImGuiCol_DragDropTarget] = RGBA(48, 190, 171, 188);
 }
 
 struct OverlayTabItem
@@ -325,31 +328,43 @@ struct OverlayTabItem
 };
 
 static const OverlayTabItem kOverlayTabs[] = {
-    { "Capture",       "Core",    "Frame source and input feed settings.",              draw_capture_settings },
-    { "Target",        "Core",    "Target selection and aim point offsets.",             draw_target },
-    { "Mouse",         "Core",    "Mouse behavior, input backend and motion profile.",   draw_mouse },
-    { "AI",            "Core",    "Model and detector thresholds.",                      draw_ai },
-    { "Neural",        "Core",    "Optional learned target association.",                draw_neural },
-    { "Buttons",       "Control", "Hotkeys for features and runtime actions.",           draw_buttons },
-    { "Overlay",       "Control", "Editor appearance and privacy options.",              draw_overlay },
-    { "Game Overlay",  "Control", "In-game render visuals and simulation options.",      draw_game_overlay_settings },
-    { "Stats",         "Monitor", "Performance and timing graphs.",                      draw_stats },
-    { "Debug",         "Monitor", "Screenshot bindings and diagnostics.",                draw_debug },
+    { "Capture",       "Vision",  "Frame source, monitor/window selection and preview.", draw_capture_settings },
+    { "AI Model",      "Vision",  "Model, backend and detector thresholds.",             draw_ai },
+    { "Depth",         "Vision",  "Depth inference, masks and depth debug overlay.",     draw_depth },
+
+    { "Target",        "Aim",     "Target selection and aim point offsets.",             draw_target },
+    { "Movement",      "Aim",     "FOV, speed, target correction and motion profile.",   draw_mouse_movement },
+    { "Prediction",    "Aim",     "Prediction points and Kalman filter tuning.",         draw_mouse_prediction },
+    { "Assist",        "Aim",     "Auto shoot, recoil compensation and assist toggles.", draw_mouse_assist },
+    { "Profiles",      "Aim",     "Per-game sensitivity and profile management.",        draw_mouse_profiles },
+
+    { "Input Device",  "Control", "Mouse backend, device connection and reconnect data.",draw_mouse_input },
+    { "Hotkeys",       "Control", "Bindings for aiming, shooting and runtime actions.",  draw_buttons },
+    { "Editor",        "Control", "Overlay editor appearance and privacy options.",      draw_overlay },
+
+    { "Game Render",   "Visuals", "In-game overlay lifetime, FPS and render toggles.",   draw_game_overlay_general },
+    { "Render Style",  "Visuals", "Boxes, capture frame and future point styling.",      draw_game_overlay_visuals },
+    { "Icon Overlay",  "Visuals", "Per-target icon image, size, anchor and class filter.",draw_game_overlay_icon },
+    { "Aim Sim",       "Visuals", "Aim simulation window and latency model controls.",   draw_aim_simulation_settings },
+
+    { "Stats",         "Monitor", "Performance, capture source and timing graphs.",      draw_stats },
+    { "Debug",         "Monitor", "Screenshots, data collection and diagnostics.",        draw_debug },
 };
 
 static void DrawMainPanelBackground(const ImVec2& pos, const ImVec2& size)
 {
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const ImVec2 max(pos.x + size.x, pos.y + size.y);
-    draw->AddRectFilled(pos, max, IM_COL32(4, 4, 4, 248), 0.0f);
-    draw->AddRect(pos, max, IM_COL32(255, 255, 255, 56), 0.0f, 0, 1.0f);
+    draw->AddRectFilled(pos, max, IM_COL32(9, 10, 12, 248), 6.0f);
+    draw->AddRectFilled(pos, ImVec2(max.x, pos.y + 2.0f), IM_COL32(48, 190, 171, 210), 6.0f, ImDrawFlags_RoundCornersTop);
+    draw->AddRect(pos, max, IM_COL32(76, 89, 101, 142), 6.0f, 0, 1.0f);
 }
 
 static bool DrawSidebarTabButton(const char* label, bool selected)
 {
     const ImVec2 pos = ImGui::GetCursorScreenPos();
     const ImGuiStyle& style = ImGui::GetStyle();
-    ImVec2 size = ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight() + style.ItemSpacing.y * 0.15f);
+    ImVec2 size = ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight() + style.ItemSpacing.y * 0.45f);
     if (size.x < 1.0f)
         size.x = 1.0f;
 
@@ -362,18 +377,21 @@ static bool DrawSidebarTabButton(const char* label, bool selected)
 
     ImU32 rowBg = IM_COL32(0, 0, 0, 0);
     if (selected)
-        rowBg = IM_COL32(60, 60, 60, 190);
+        rowBg = IM_COL32(24, 41, 45, 230);
     else if (hovered)
-        rowBg = IM_COL32(28, 28, 28, 210);
+        rowBg = IM_COL32(25, 29, 34, 224);
 
-    if ((rowBg >> IM_COL32_A_SHIFT) != 0)
-        draw->AddRectFilled(pos, max, rowBg, 0.0f);
+    if (selected || hovered)
+        draw->AddRectFilled(pos, max, rowBg, 4.0f);
     if (selected)
-        draw->AddRect(pos, max, IM_COL32(255, 255, 255, 76), 0.0f, 0, 1.0f);
+    {
+        draw->AddRectFilled(pos, ImVec2(pos.x + 3.0f, max.y), IM_COL32(48, 190, 171, 255), 4.0f, ImDrawFlags_RoundCornersLeft);
+        draw->AddRect(pos, max, IM_COL32(68, 205, 186, 150), 4.0f, 0, 1.0f);
+    }
 
     const float textY = pos.y + (size.y - ImGui::GetTextLineHeight()) * 0.5f;
-    const ImU32 textCol = selected ? IM_COL32(245, 245, 245, 255) : (hovered ? IM_COL32(226, 226, 226, 255) : IM_COL32(192, 200, 214, 240));
-    draw->AddText(ImVec2(pos.x + style.FramePadding.x + 2.0f, textY), textCol, label);
+    const ImU32 textCol = selected ? IM_COL32(245, 248, 250, 255) : (hovered ? IM_COL32(226, 232, 238, 255) : IM_COL32(185, 196, 207, 240));
+    draw->AddText(ImVec2(pos.x + style.FramePadding.x + 8.0f, textY), textCol, label);
 
     return pressed;
 }
@@ -748,7 +766,7 @@ void SetupImGui()
     ImGui_ImplWin32_Init(g_hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
-    ApplyTheme_RoseDark();
+    ApplyTheme_CompactDark();
     g_baseStyle = ImGui::GetStyle();
     g_baseStyleReady = true;
     g_runtimeUiScale = -1.0f;
@@ -891,7 +909,10 @@ void OverlayThread()
             }
             else
             {
-                OverlayConfig_SaveNow();
+                {
+                    std::lock_guard<std::mutex> lock(configMutex);
+                    OverlayConfig_SaveNow();
+                }
                 ShowWindow(g_hwnd, SW_HIDE);
             }
 
@@ -911,7 +932,7 @@ void OverlayThread()
         const float w = (float)overlayWidth;
         const float h = (float)overlayHeight;
         ApplyRuntimeUiScale(w, h);
-        const float sidebarWidth = std::clamp(w * 0.23f, w * 0.18f, w * 0.30f);
+        const float sidebarWidth = std::clamp(w * 0.27f, 150.0f, 220.0f);
 
         ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(w, h), ImGuiCond_Always);
@@ -936,17 +957,11 @@ void OverlayThread()
             if (activeTab < 0 || activeTab >= tabCount)
                 activeTab = 0;
 
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(11, 11, 11, 245));
-            ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(255, 255, 255, 56));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(13, 15, 18, 246));
+            ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(76, 89, 101, 132));
             ImGui::BeginChild("##options_nav", ImVec2(sidebarWidth, 0.0f), true,
                 ImGuiWindowFlags_AlwaysUseWindowPadding | ImGuiWindowFlags_AlwaysVerticalScrollbar);
-
-            ImGui::TextUnformatted("SunOne Overlay");
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(143, 160, 182, 255));
-            ImGui::TextUnformatted("HOME to open/close");
-            ImGui::PopStyleColor();
-            ImGui::Dummy(ImVec2(0.0f, 2.0f));
 
             const char* lastGroup = nullptr;
             for (int i = 0; i < tabCount; ++i)
@@ -955,8 +970,8 @@ void OverlayThread()
                 if (!lastGroup || std::strcmp(lastGroup, group) != 0)
                 {
                     if (lastGroup)
-                        ImGui::Dummy(ImVec2(0.0f, 2.0f));
-                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(165, 180, 199, 228));
+                        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(105, 207, 190, 230));
                     ImGui::TextUnformatted(group);
                     ImGui::PopStyleColor();
                 }
@@ -968,17 +983,19 @@ void OverlayThread()
             ImGui::PopStyleColor(2);
             ImGui::PopStyleVar();
 
-            ImGui::SameLine(0.0f, 6.0f);
+            ImGui::SameLine(0.0f, 8.0f);
 
             float contentExtraW = 0.0f;
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(12, 12, 12, 245));
-            ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(255, 255, 255, 56));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(14, 17, 20, 246));
+            ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(76, 89, 101, 132));
             ImGui::BeginChild("##options_content", ImVec2(0.0f, 0.0f), true,
                 ImGuiWindowFlags_AlwaysUseWindowPadding | ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(245, 248, 250, 255));
             ImGui::TextUnformatted(kOverlayTabs[activeTab].label);
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(143, 160, 182, 255));
+            ImGui::PopStyleColor();
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(148, 160, 174, 255));
             ImGui::TextWrapped("%s", kOverlayTabs[activeTab].description);
             ImGui::PopStyleColor();
             ImGui::Separator();
@@ -1011,7 +1028,11 @@ void OverlayThread()
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    OverlayConfig_SaveNow();
+    {
+        std::lock_guard<std::mutex> lock(configMutex);
+        OverlayConfig_SaveNow();
+    }
+
     release_body_texture();
 
     ImGui_ImplDX11_Shutdown();

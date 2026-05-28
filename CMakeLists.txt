@@ -33,7 +33,7 @@ set(AIMBOT_OPENCV_LIBRARY "" CACHE FILEPATH "Path to opencv_world*.lib")
 set(AIMBOT_OPENCV_DLL "" CACHE FILEPATH "Path to opencv_world*.dll")
 set(AIMBOT_TENSORRT_ROOT "" CACHE PATH "Path to TensorRT root directory")
 set(AIMBOT_GHUB_MOUSE_DLL "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/ghub_mouse.dll" CACHE FILEPATH "Path to ghub_mouse.dll")
-set(AIMBOT_RAZER_CONTROL_DLL "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/razer-controls/x64/Release/chroma_lighting.dll" CACHE FILEPATH "Path to chroma_lighting.dll")
+set(AIMBOT_RZCTL_DLL "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/rzctl.dll" CACHE FILEPATH "Path to rzctl.dll")
 set(AIMBOT_CUDNN_ROOT "$ENV{ProgramW6432}/NVIDIA/CUDNN/v9.17" CACHE PATH "Path to cuDNN root directory (optional)")
 set(AIMBOT_CPPWINRT_INCLUDE_DIR "" CACHE PATH "Path to Windows SDK cppwinrt include directory")
 
@@ -227,13 +227,13 @@ set(AIMBOT_SOURCES
     "${SRC_DIR}/mouse/kmboxNetConnection.cpp"
     "${SRC_DIR}/mouse/kmbox_net/kmboxNet.cpp"
     "${SRC_DIR}/mouse/Makcu.cpp"
+    "${SRC_DIR}/mouse/MouseInput.cpp"
     "${SRC_DIR}/mouse/mouse.cpp"
     "${SRC_DIR}/mouse/rzctl.cpp"
     "${SRC_DIR}/mouse/Teensy41RawHid.cpp"
     "${SRC_DIR}/mouse/Arduino.cpp"
     "${SRC_DIR}/mouse/RP2350.cpp"
     "${SRC_DIR}/mouse/AimbotTarget.cpp"
-    "${SRC_DIR}/neural/NeuralTracker.cpp"
     "${SRC_DIR}/overlay/draw_ai.cpp"
     "${SRC_DIR}/overlay/draw_buttons.cpp"
     "${SRC_DIR}/overlay/draw_capture.cpp"
@@ -242,7 +242,6 @@ set(AIMBOT_SOURCES
     "${SRC_DIR}/overlay/draw_depth.cpp"
     "${SRC_DIR}/overlay/draw_game_overlay.cpp"
     "${SRC_DIR}/overlay/draw_mouse.cpp"
-    "${SRC_DIR}/overlay/draw_neural.cpp"
     "${SRC_DIR}/overlay/draw_overlay.cpp"
     "${SRC_DIR}/overlay/draw_stats.cpp"
     "${SRC_DIR}/overlay/draw_target.cpp"
@@ -414,7 +413,7 @@ endif()
 if(AIMBOT_COPY_RUNTIME_DLLS)
     aimbot_copy_if_exists(ai "${AIMBOT_OPENCV_DLL}")
     aimbot_copy_if_exists(ai "${AIMBOT_GHUB_MOUSE_DLL}")
-    aimbot_copy_if_exists(ai "${AIMBOT_RAZER_CONTROL_DLL}")
+    aimbot_copy_if_exists(ai "${AIMBOT_RZCTL_DLL}")
     aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime.dll")
     aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime_providers_shared.dll")
     aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime_providers_dml.dll")
