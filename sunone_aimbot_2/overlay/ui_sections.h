@@ -24,7 +24,7 @@ inline void DrawBodyFrame(const ImVec2& min, const ImVec2& max, bool subsection 
 {
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     const ImU32 border = subsection ? IM_COL32(76, 89, 101, 92) : IM_COL32(76, 89, 101, 122);
-    drawList->AddRect(min, max, border, subsection ? 3.0f : 4.0f, 0, 1.0f);
+    drawList->AddRect(min, max, border, subsection ? 3.0f : 4.0f, 1.0f);
 }
 
 inline void BeginBodyGroup(bool subsection = false) noexcept

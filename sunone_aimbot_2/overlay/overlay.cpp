@@ -83,6 +83,13 @@ static bool g_autoResizeEnabled = true;
 static ImGuiStyle g_baseStyle{};
 static bool g_baseStyleReady = false;
 static float g_runtimeUiScale = -1.0f;
+static bool g_overlayVisible = false;
+static bool g_renderingOverlayFrame = false;
+static bool g_manualWindowDragActive = false;
+static WPARAM g_manualWindowDragHit = HTNOWHERE;
+static POINT g_manualWindowDragStartPoint{};
+static RECT g_manualWindowDragStartRect{};
+static int g_activeOverlayTab = 0;
 
 std::vector<std::string> availableModels;
 std::vector<std::string> key_names;
@@ -94,6 +101,8 @@ static UINT GetDpiForWindowSafe(HWND hwnd);
 static RECT GetOverlayWorkArea(HWND hwnd);
 static void ClampOverlayToWorkArea(HWND hwnd, int& x, int& y, int& w, int& h);
 static void EnsureOverlayInsideWorkArea(HWND hwnd);
+static bool ResizeOverlayBackBuffer(UINT width, UINT height);
+static HRESULT RenderOverlayFrame(bool allowAutoResize, bool allowConfigSave);
 
 void load_body_texture();
 void release_body_texture();
@@ -104,37 +113,25 @@ static inline int ClampInt(int v, int lo, int hi)
     return (v < lo) ? lo : (v > hi) ? hi : v;
 }
 
-static float ComputeRuntimeUiScale(float windowW, float windowH)
+static float ComputeRuntimeUiScale()
 {
-    const float safeW = (windowW > 1.0f) ? windowW : static_cast<float>(BASE_OVERLAY_WIDTH);
-    const float safeH = (windowH > 1.0f) ? windowH : static_cast<float>(BASE_OVERLAY_HEIGHT);
-    const float refW = static_cast<float>(BASE_OVERLAY_WIDTH);
-    const float refH = static_cast<float>(BASE_OVERLAY_HEIGHT);
-
-    const float wFactor = safeW / refW;
-    const float hFactor = safeH / refH;
-    float autoFactor = std::sqrt(wFactor * hFactor);
-    autoFactor = std::clamp(autoFactor, 0.85f, 1.90f);
-
-    const float userFactor = std::clamp(config.overlay_ui_scale, 0.85f, 1.35f);
-    return std::clamp(autoFactor * userFactor, 0.80f, 2.20f);
+    return std::clamp(config.overlay_ui_scale, 0.85f, 1.35f);
 }
 
-static void ApplyRuntimeUiScale(float windowW, float windowH)
+static void ApplyRuntimeUiScale()
 {
     if (!g_baseStyleReady)
         return;
 
-    ImGuiIO& io = ImGui::GetIO();
-    const float targetScale = ComputeRuntimeUiScale(windowW, windowH);
+    const float targetScale = ComputeRuntimeUiScale();
+    ImGuiStyle& style = ImGui::GetStyle();
     if (std::fabs(targetScale - g_runtimeUiScale) > 0.01f)
     {
-        ImGuiStyle& style = ImGui::GetStyle();
         style = g_baseStyle;
         style.ScaleAllSizes(targetScale);
         g_runtimeUiScale = targetScale;
     }
-    io.FontGlobalScale = targetScale;
+    style.FontScaleMain = targetScale;
 }
 
 static void TryAutoResizeOverlay(float extraContentWidth)
@@ -311,7 +308,7 @@ static void ApplyTheme_CompactDark()
     c[ImGuiCol_TableRowBg] = RGBA(0, 0, 0, 0);
     c[ImGuiCol_TableRowBgAlt] = RGBA(255, 255, 255, 8);
 
-    c[ImGuiCol_NavHighlight] = accent;
+    c[ImGuiCol_NavCursor] = accent;
     c[ImGuiCol_NavWindowingHighlight] = accentSoft;
     c[ImGuiCol_NavWindowingDimBg] = RGBA(0, 0, 0, 110);
 
@@ -357,7 +354,7 @@ static void DrawMainPanelBackground(const ImVec2& pos, const ImVec2& size)
     const ImVec2 max(pos.x + size.x, pos.y + size.y);
     draw->AddRectFilled(pos, max, IM_COL32(9, 10, 12, 248), 6.0f);
     draw->AddRectFilled(pos, ImVec2(max.x, pos.y + 2.0f), IM_COL32(48, 190, 171, 210), 6.0f, ImDrawFlags_RoundCornersTop);
-    draw->AddRect(pos, max, IM_COL32(76, 89, 101, 142), 6.0f, 0, 1.0f);
+    draw->AddRect(pos, max, IM_COL32(76, 89, 101, 142), 6.0f, 1.0f);
 }
 
 static bool DrawSidebarTabButton(const char* label, bool selected)
@@ -386,7 +383,7 @@ static bool DrawSidebarTabButton(const char* label, bool selected)
     if (selected)
     {
         draw->AddRectFilled(pos, ImVec2(pos.x + 3.0f, max.y), IM_COL32(48, 190, 171, 255), 4.0f, ImDrawFlags_RoundCornersLeft);
-        draw->AddRect(pos, max, IM_COL32(68, 205, 186, 150), 4.0f, 0, 1.0f);
+        draw->AddRect(pos, max, IM_COL32(68, 205, 186, 150), 4.0f, 1.0f);
     }
 
     const float textY = pos.y + (size.y - ImGui::GetTextLineHeight()) * 0.5f;
@@ -633,7 +630,35 @@ void CreateRenderTarget()
 
 void CleanupRenderTarget()
 {
+    if (g_pd3dDeviceContext)
+    {
+        ID3D11RenderTargetView* nullRenderTarget = nullptr;
+        g_pd3dDeviceContext->OMSetRenderTargets(1, &nullRenderTarget, NULL);
+    }
     if (g_mainRenderTargetView) { g_mainRenderTargetView->Release(); g_mainRenderTargetView = NULL; }
+}
+
+static bool ResizeOverlayBackBuffer(UINT width, UINT height)
+{
+    if (width == 0 || height == 0)
+        return false;
+
+    overlayWidth = static_cast<int>(width);
+    overlayHeight = static_cast<int>(height);
+
+    if (!g_pd3dDevice || !g_pSwapChain)
+        return true;
+
+    CleanupRenderTarget();
+    const HRESULT hr = g_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+    if (FAILED(hr))
+        return false;
+
+    CreateRenderTarget();
+    if (g_dcompDevice)
+        g_dcompDevice->Commit();
+
+    return true;
 }
 
 void CleanupDeviceD3D()
@@ -648,6 +673,118 @@ void CleanupDeviceD3D()
     if (g_pd3dDeviceContext) { g_pd3dDeviceContext->Release(); g_pd3dDeviceContext = NULL; }
     if (g_pd3dDevice) { g_pd3dDevice->Release(); g_pd3dDevice = NULL; }
     if (g_pBlendState) { g_pBlendState->Release(); g_pBlendState = nullptr; }
+}
+
+static bool IsOverlayResizeHit(WPARAM hit)
+{
+    return hit == HTLEFT || hit == HTRIGHT || hit == HTTOP || hit == HTBOTTOM ||
+           hit == HTTOPLEFT || hit == HTTOPRIGHT || hit == HTBOTTOMLEFT || hit == HTBOTTOMRIGHT;
+}
+
+static bool IsOverlayMoveOrResizeHit(WPARAM hit)
+{
+    return hit == HTCAPTION || IsOverlayResizeHit(hit);
+}
+
+static void BeginManualOverlayWindowDrag(HWND hwnd, WPARAM hit)
+{
+    if (!hwnd || !IsOverlayMoveOrResizeHit(hit))
+        return;
+
+    g_manualWindowDragActive = true;
+    g_manualWindowDragHit = hit;
+    ::GetCursorPos(&g_manualWindowDragStartPoint);
+    ::GetWindowRect(hwnd, &g_manualWindowDragStartRect);
+    ::SetCapture(hwnd);
+
+    if (IsOverlayResizeHit(hit))
+        g_autoResizeEnabled = false;
+}
+
+static void EndManualOverlayWindowDrag(HWND hwnd)
+{
+    if (!g_manualWindowDragActive)
+        return;
+
+    g_manualWindowDragActive = false;
+    g_manualWindowDragHit = HTNOWHERE;
+
+    if (::GetCapture() == hwnd)
+        ::ReleaseCapture();
+
+    EnsureOverlayInsideWorkArea(hwnd);
+}
+
+static void UpdateManualOverlayWindowDrag(HWND hwnd)
+{
+    if (!hwnd || !g_manualWindowDragActive)
+        return;
+
+    POINT pt{};
+    ::GetCursorPos(&pt);
+
+    const int dx = pt.x - g_manualWindowDragStartPoint.x;
+    const int dy = pt.y - g_manualWindowDragStartPoint.y;
+    const int startW = g_manualWindowDragStartRect.right - g_manualWindowDragStartRect.left;
+    const int startH = g_manualWindowDragStartRect.bottom - g_manualWindowDragStartRect.top;
+
+    int x = g_manualWindowDragStartRect.left;
+    int y = g_manualWindowDragStartRect.top;
+    int w = startW;
+    int h = startH;
+
+    if (g_manualWindowDragHit == HTCAPTION)
+    {
+        x += dx;
+        y += dy;
+        ClampOverlayToWorkArea(hwnd, x, y, w, h);
+    }
+    else
+    {
+        const UINT dpi = GetDpiForWindowSafe(hwnd);
+        const int minW = ::MulDiv(MIN_OVERLAY_W, (int)dpi, 96);
+        const int minH = ::MulDiv(MIN_OVERLAY_H, (int)dpi, 96);
+        const RECT work = GetOverlayWorkArea(hwnd);
+        const int maxW = OtherTools::MaxInt(minW, static_cast<int>((work.right - work.left) - WORKAREA_MARGIN_PX));
+        const int maxH = OtherTools::MaxInt(minH, static_cast<int>((work.bottom - work.top) - WORKAREA_MARGIN_PX));
+
+        const bool left = g_manualWindowDragHit == HTLEFT ||
+                          g_manualWindowDragHit == HTTOPLEFT ||
+                          g_manualWindowDragHit == HTBOTTOMLEFT;
+        const bool right = g_manualWindowDragHit == HTRIGHT ||
+                           g_manualWindowDragHit == HTTOPRIGHT ||
+                           g_manualWindowDragHit == HTBOTTOMRIGHT;
+        const bool top = g_manualWindowDragHit == HTTOP ||
+                         g_manualWindowDragHit == HTTOPLEFT ||
+                         g_manualWindowDragHit == HTTOPRIGHT;
+        const bool bottom = g_manualWindowDragHit == HTBOTTOM ||
+                            g_manualWindowDragHit == HTBOTTOMLEFT ||
+                            g_manualWindowDragHit == HTBOTTOMRIGHT;
+
+        if (left)
+        {
+            w = ClampInt(startW - dx, minW, maxW);
+            x = g_manualWindowDragStartRect.right - w;
+        }
+        else if (right)
+        {
+            w = ClampInt(startW + dx, minW, maxW);
+        }
+
+        if (top)
+        {
+            h = ClampInt(startH - dy, minH, maxH);
+            y = g_manualWindowDragStartRect.bottom - h;
+        }
+        else if (bottom)
+        {
+            h = ClampInt(startH + dy, minH, maxH);
+        }
+
+        ClampOverlayToWorkArea(hwnd, x, y, w, h);
+    }
+
+    ::SetWindowPos(hwnd, NULL, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -698,6 +835,40 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (maxH > 0) mmi->ptMaxTrackSize.y = maxH;
             return 0;
         }
+        case WM_NCLBUTTONDOWN:
+            if (IsOverlayMoveOrResizeHit(wParam))
+            {
+                BeginManualOverlayWindowDrag(hWnd, wParam);
+                return 0;
+            }
+            break;
+
+        case WM_MOUSEMOVE:
+            if (g_manualWindowDragActive)
+            {
+                UpdateManualOverlayWindowDrag(hWnd);
+                return 0;
+            }
+            break;
+
+        case WM_LBUTTONUP:
+        case WM_NCLBUTTONUP:
+            if (g_manualWindowDragActive)
+            {
+                EndManualOverlayWindowDrag(hWnd);
+                return 0;
+            }
+            break;
+
+        case WM_CAPTURECHANGED:
+            if (g_manualWindowDragActive)
+            {
+                g_manualWindowDragActive = false;
+                g_manualWindowDragHit = HTNOWHERE;
+                EnsureOverlayInsideWorkArea(hWnd);
+                return 0;
+            }
+            break;
     }
 
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
@@ -719,18 +890,13 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
 
     case WM_SIZE:
-        if (g_pd3dDevice != NULL && wParam != SIZE_MINIMIZED)
+        if (wParam != SIZE_MINIMIZED)
         {
             const UINT width = (UINT)LOWORD(lParam);
             const UINT height = (UINT)HIWORD(lParam);
 
-            overlayWidth = (int)width;
-            overlayHeight = (int)height;
-
-            CleanupRenderTarget();
-            g_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
-            CreateRenderTarget();
-            if (g_dcompDevice) g_dcompDevice->Commit();
+            if (ResizeOverlayBackBuffer(width, height) && g_overlayVisible)
+                RenderOverlayFrame(false, false);
         }
         return 0;
 
@@ -750,7 +916,7 @@ void SetupImGui()
     ImGui::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
-    io.FontGlobalScale = 1.0f;
+    ImGui::GetStyle().FontScaleMain = 1.0f;
     ImFontConfig fontConfig{};
     fontConfig.OversampleH = 3;
     fontConfig.OversampleV = 2;
@@ -849,6 +1015,123 @@ bool CreateOverlayWindow()
     return true;
 }
 
+static HRESULT RenderOverlayFrame(bool allowAutoResize, bool allowConfigSave)
+{
+    if (!g_overlayVisible || !g_pSwapChain || !g_pd3dDeviceContext || !g_mainRenderTargetView ||
+        !ImGui::GetCurrentContext() || g_renderingOverlayFrame)
+    {
+        return S_FALSE;
+    }
+
+    const float w = static_cast<float>(overlayWidth);
+    const float h = static_cast<float>(overlayHeight);
+    if (w <= 0.0f || h <= 0.0f)
+        return S_FALSE;
+
+    g_renderingOverlayFrame = true;
+
+    ApplyRuntimeUiScale();
+
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    const float sidebarWidth = std::clamp(w * 0.27f, 150.0f, 220.0f);
+
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(w, h), ImGuiCond_Always);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+    ImGui::Begin("##editor_root", nullptr,
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleColor();
+
+    DrawMainPanelBackground(ImGui::GetWindowPos(), ImGui::GetWindowSize());
+
+    {
+        std::lock_guard<std::mutex> lock(configMutex);
+
+        const int tabCount = static_cast<int>(sizeof(kOverlayTabs) / sizeof(kOverlayTabs[0]));
+        if (g_activeOverlayTab < 0 || g_activeOverlayTab >= tabCount)
+            g_activeOverlayTab = 0;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(13, 15, 18, 246));
+        ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(76, 89, 101, 132));
+        ImGui::BeginChild("##options_nav", ImVec2(sidebarWidth, 0.0f),
+            ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
+            ImGuiWindowFlags_AlwaysVerticalScrollbar);
+
+        const char* lastGroup = nullptr;
+        for (int i = 0; i < tabCount; ++i)
+        {
+            const char* group = kOverlayTabs[i].group;
+            if (!lastGroup || std::strcmp(lastGroup, group) != 0)
+            {
+                if (lastGroup)
+                    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(105, 207, 190, 230));
+                ImGui::TextUnformatted(group);
+                ImGui::PopStyleColor();
+            }
+            if (DrawSidebarTabButton(kOverlayTabs[i].label, g_activeOverlayTab == i))
+                g_activeOverlayTab = i;
+            lastGroup = group;
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar();
+
+        ImGui::SameLine(0.0f, 8.0f);
+
+        float contentExtraW = 0.0f;
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(14, 17, 20, 246));
+        ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(76, 89, 101, 132));
+        ImGui::BeginChild("##options_content", ImVec2(0.0f, 0.0f),
+            ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
+            ImGuiWindowFlags_AlwaysVerticalScrollbar);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(245, 248, 250, 255));
+        ImGui::TextUnformatted(kOverlayTabs[g_activeOverlayTab].label);
+        ImGui::PopStyleColor();
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(148, 160, 174, 255));
+        ImGui::TextWrapped("%s", kOverlayTabs[g_activeOverlayTab].description);
+        ImGui::PopStyleColor();
+        ImGui::Separator();
+
+        kOverlayTabs[g_activeOverlayTab].draw();
+
+        contentExtraW = ImGui::GetScrollMaxX();
+        ImGui::EndChild();
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar();
+
+        if (allowAutoResize)
+            TryAutoResizeOverlay(contentExtraW);
+
+        if (allowConfigSave)
+            OverlayConfig_TrySave();
+    }
+
+    ImGui::End();
+    ImGui::Render();
+
+    const float clear_color_with_alpha[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, NULL);
+    g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+    const HRESULT result = g_pSwapChain->Present(0, 0);
+    g_renderingOverlayFrame = false;
+    return result;
+}
+
 void OverlayThread()
 {
     if (!CreateOverlayWindow())
@@ -899,6 +1182,7 @@ void OverlayThread()
         if (isAnyKeyPressed(config.button_open_overlay) & 0x1)
         {
             show_overlay = !show_overlay;
+            g_overlayVisible = show_overlay;
 
             if (show_overlay)
             {
@@ -925,103 +1209,7 @@ void OverlayThread()
             continue;
         }
 
-        ImGui_ImplDX11_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
-
-        const float w = (float)overlayWidth;
-        const float h = (float)overlayHeight;
-        ApplyRuntimeUiScale(w, h);
-        const float sidebarWidth = std::clamp(w * 0.27f, 150.0f, 220.0f);
-
-        ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(w, h), ImGuiCond_Always);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
-        ImGui::Begin("##editor_root", nullptr,
-            ImGuiWindowFlags_NoDecoration |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoSavedSettings |
-            ImGuiWindowFlags_NoBringToFrontOnFocus |
-            ImGuiWindowFlags_NoScrollbar |
-            ImGuiWindowFlags_NoScrollWithMouse);
-        ImGui::PopStyleColor();
-
-        DrawMainPanelBackground(ImGui::GetWindowPos(), ImGui::GetWindowSize());
-
-        {
-            std::lock_guard<std::mutex> lock(configMutex);
-
-            static int activeTab = 0;
-            const int tabCount = (int)(sizeof(kOverlayTabs) / sizeof(kOverlayTabs[0]));
-            if (activeTab < 0 || activeTab >= tabCount)
-                activeTab = 0;
-
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(13, 15, 18, 246));
-            ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(76, 89, 101, 132));
-            ImGui::BeginChild("##options_nav", ImVec2(sidebarWidth, 0.0f), true,
-                ImGuiWindowFlags_AlwaysUseWindowPadding | ImGuiWindowFlags_AlwaysVerticalScrollbar);
-
-            const char* lastGroup = nullptr;
-            for (int i = 0; i < tabCount; ++i)
-            {
-                const char* group = kOverlayTabs[i].group;
-                if (!lastGroup || std::strcmp(lastGroup, group) != 0)
-                {
-                    if (lastGroup)
-                        ImGui::Dummy(ImVec2(0.0f, 4.0f));
-                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(105, 207, 190, 230));
-                    ImGui::TextUnformatted(group);
-                    ImGui::PopStyleColor();
-                }
-                if (DrawSidebarTabButton(kOverlayTabs[i].label, activeTab == i))
-                    activeTab = i;
-                lastGroup = group;
-            }
-            ImGui::EndChild();
-            ImGui::PopStyleColor(2);
-            ImGui::PopStyleVar();
-
-            ImGui::SameLine(0.0f, 8.0f);
-
-            float contentExtraW = 0.0f;
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(14, 17, 20, 246));
-            ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(76, 89, 101, 132));
-            ImGui::BeginChild("##options_content", ImVec2(0.0f, 0.0f), true,
-                ImGuiWindowFlags_AlwaysUseWindowPadding | ImGuiWindowFlags_AlwaysVerticalScrollbar);
-
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(245, 248, 250, 255));
-            ImGui::TextUnformatted(kOverlayTabs[activeTab].label);
-            ImGui::PopStyleColor();
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(148, 160, 174, 255));
-            ImGui::TextWrapped("%s", kOverlayTabs[activeTab].description);
-            ImGui::PopStyleColor();
-            ImGui::Separator();
-
-            kOverlayTabs[activeTab].draw();
-
-            const float overflowX = ImGui::GetScrollMaxX();
-            contentExtraW = overflowX;
-            ImGui::EndChild();
-            ImGui::PopStyleColor(2);
-            ImGui::PopStyleVar();
-
-            TryAutoResizeOverlay(contentExtraW);
-
-            OverlayConfig_TrySave();
-        }
-
-        ImGui::End();
-        ImGui::Render();
-
-        const float clear_color_with_alpha[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-        g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, NULL);
-        g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
-        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-
-        HRESULT result = g_pSwapChain->Present(0, 0);
+        HRESULT result = RenderOverlayFrame(true, true);
         if (result == DXGI_STATUS_OCCLUDED || result == DXGI_ERROR_ACCESS_LOST)
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 

@@ -336,7 +336,7 @@ void draw_debug_frame()
     ImGui::SliderFloat("Debug scale", &debug_scale, 0.1f, 2.0f, "%.1fx");
 
     ImVec2 image_size(texW * debug_scale, texH * debug_scale);
-    ImGui::Image(g_debugSRV, image_size);
+    ImGui::Image((ImTextureID)(intptr_t)g_debugSRV, image_size);
 
     ImVec2 image_pos = ImGui::GetItemRectMin();
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -364,7 +364,7 @@ void draw_debug_frame()
             if (g_maskSRV)
             {
                 ImVec2 overlay_max(image_pos.x + image_size.x, image_pos.y + image_size.y);
-                draw_list->AddImage(g_maskSRV, image_pos, overlay_max);
+                draw_list->AddImage((ImTextureID)(intptr_t)g_maskSRV, image_pos, overlay_max);
             }
         }
     }
@@ -383,7 +383,7 @@ void draw_debug_frame()
 
             ImU32 color = IM_COL32(255, 0, 0, 255);
 
-            draw_list->AddRect(p1, p2, color, 0.0f, 0, 2.0f);
+            draw_list->AddRect(p1, p2, color, 0.0f, 2.0f);
 
             if (i < detectionBuffer.classes.size())
             {

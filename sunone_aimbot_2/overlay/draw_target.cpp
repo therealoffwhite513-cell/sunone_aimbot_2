@@ -47,7 +47,7 @@ void draw_target()
     {
         if (bodyTexture)
         {
-            ImGui::Image((void*)bodyTexture, bodyImageSize);
+            ImGui::Image((ImTextureID)(intptr_t)bodyTexture, bodyImageSize);
 
             ImVec2 image_pos = ImGui::GetItemRectMin();
             ImVec2 image_size = ImGui::GetItemRectSize();

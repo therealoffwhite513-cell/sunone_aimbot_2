@@ -179,11 +179,10 @@ void draw_capture_settings()
                 ImGui::SameLine(0.0f, 8.0f);
                 ImGui::SetNextItemWidth(CaptureCompactComboWidth());
                 if (ImGui::Combo("##capture_target_winrt", &currentTargetIndex,
-                    [](void* data, int idx, const char** out_text) {
-                        const auto* v = static_cast<std::vector<std::string>*>(data);
-                        if (idx < 0 || idx >= (int)v->size()) return false;
-                        *out_text = v->at(idx).c_str();
-                        return true;
+                    [](void* data, int idx) -> const char* {
+                        const auto* v = static_cast<const std::vector<std::string>*>(data);
+                        if (idx < 0 || idx >= (int)v->size()) return nullptr;
+                        return v->at(idx).c_str();
                     }, (void*)&targetOptions, (int)targetOptions.size()))
                 {
                     config.capture_target = targetOptions[currentTargetIndex];

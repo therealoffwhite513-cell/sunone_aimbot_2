@@ -322,8 +322,8 @@ target_include_directories(ai PRIVATE
     "${SRC_DIR}/modules/makcu/include"
     "${SRC_DIR}/modules/serial/include"
     "${SRC_DIR}/modules/stb"
-    "${SRC_DIR}/modules/imgui-1.91.2"
-    "${SRC_DIR}/modules/imgui-1.91.2/backends"
+    "${SRC_DIR}/modules/imgui-1.92.8"
+    "${SRC_DIR}/modules/imgui-1.92.8/backends"
 )
 
 target_compile_definitions(ai PRIVATE
