@@ -1181,6 +1181,7 @@ std::vector<Detection> TrtDetector::postProcess(const float* output, const std::
         numClasses,
         config.confidence_threshold,
         config.nms_threshold,
+        std::max(1, config.max_detections),
         nmsTime
     );
     filterDetectionsByDepthMask(detections);

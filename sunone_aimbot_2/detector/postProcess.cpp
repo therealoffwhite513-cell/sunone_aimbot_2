@@ -9,6 +9,48 @@
 #include "trt_detector.h"
 #endif
 
+namespace
+{
+void LimitDetectionsByConfidence(std::vector<Detection>& detections, size_t limit)
+{
+    if (limit == 0 || detections.size() <= limit)
+        return;
+
+    const auto kth = detections.begin() + static_cast<std::vector<Detection>::difference_type>(limit);
+    std::nth_element(
+        detections.begin(),
+        kth,
+        detections.end(),
+        [](const Detection& a, const Detection& b)
+        {
+            return a.confidence > b.confidence;
+        });
+    detections.resize(limit);
+}
+
+void RunBoundedNms(
+    std::vector<Detection>& detections,
+    float nmsThreshold,
+    int maxDetections,
+    std::chrono::duration<double, std::milli>* nmsTime)
+{
+    constexpr size_t kPreNmsHardLimit = 1000;
+
+    size_t preNmsLimit = kPreNmsHardLimit;
+    if (maxDetections > 0)
+    {
+        const size_t requested = static_cast<size_t>(maxDetections);
+        preNmsLimit = std::min(kPreNmsHardLimit, std::max(requested, requested * 8));
+    }
+
+    LimitDetectionsByConfidence(detections, preNmsLimit);
+    NMS(detections, nmsThreshold, nmsTime);
+
+    if (maxDetections > 0)
+        LimitDetectionsByConfidence(detections, static_cast<size_t>(maxDetections));
+}
+}
+
 void NMS(std::vector<Detection>& detections, float nmsThreshold, std::chrono::duration<double, std::milli>* nmsTime)
 {
     if (detections.empty()) return;
@@ -82,6 +124,7 @@ std::vector<Detection> postProcessYolo(
     int numClasses,
     float confThreshold,
     float nmsThreshold,
+    int maxDetections,
     std::chrono::duration<double, std::milli>* nmsTime
 )
 {
@@ -164,7 +207,7 @@ std::vector<Detection> postProcessYolo(
         }
     }
 
-    NMS(detections, nmsThreshold, nmsTime);
+    RunBoundedNms(detections, nmsThreshold, maxDetections, nmsTime);
     return detections;
 }
 #endif
@@ -175,6 +218,7 @@ std::vector<Detection> postProcessYoloDML(
     int numClasses,
     float confThreshold,
     float nmsThreshold,
+    int maxDetections,
     std::chrono::duration<double, std::milli>* nmsTime
 )
 {
@@ -212,7 +256,7 @@ std::vector<Detection> postProcessYoloDML(
                 detections.push_back(Detection{ box, confidence, classId });
             }
         }
-        NMS(detections, nmsThreshold, nmsTime);
+        RunBoundedNms(detections, nmsThreshold, maxDetections, nmsTime);
         return detections;
     }
 
@@ -252,7 +296,7 @@ std::vector<Detection> postProcessYoloDML(
     }
     if (!detections.empty())
     {
-        NMS(detections, nmsThreshold, nmsTime);
+        RunBoundedNms(detections, nmsThreshold, maxDetections, nmsTime);
     }
     return detections;
 }

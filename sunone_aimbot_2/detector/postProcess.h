@@ -1,6 +1,8 @@
 #ifndef POSTPROCESS_H
 #define POSTPROCESS_H
 
+#include <chrono>
+#include <cstdint>
 #include <vector>
 #include <opencv2/opencv.hpp>
 
@@ -24,6 +26,7 @@ std::vector<Detection> postProcessYolo(
     int numClasses,
     float confThreshold,
     float nmsThreshold,
+    int maxDetections = 100,
     std::chrono::duration<double, std::milli>* nmsTime = nullptr
 );
 #endif
@@ -34,6 +37,7 @@ std::vector<Detection> postProcessYoloDML(
     int numClasses,
     float confThreshold,
     float nmsThreshold,
+    int maxDetections = 100,
     std::chrono::duration<double, std::milli>* nmsTime = nullptr
 );
 #endif // POSTPROCESS_H

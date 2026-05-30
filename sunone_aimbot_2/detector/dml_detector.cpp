@@ -104,6 +104,7 @@ std::vector<Detection> decodeSunPointRaw(
     int targetH,
     float confThreshold,
     float nmsThreshold,
+    int maxDetections,
     std::chrono::duration<double, std::milli>* nmsTime)
 {
     std::vector<Detection> detections;
@@ -123,7 +124,7 @@ std::vector<Detection> decodeSunPointRaw(
 
     const float strideX = static_cast<float>(targetW) / static_cast<float>(gridW);
     const float strideY = static_cast<float>(targetH) / static_cast<float>(gridH);
-    detections.reserve(static_cast<size_t>(std::max(config.max_detections, 16)));
+    detections.reserve(static_cast<size_t>(std::max(maxDetections, 16)));
 
     for (int c = 0; c < classes; ++c)
     {
@@ -182,15 +183,15 @@ std::vector<Detection> decodeSunPointRaw(
         }
     }
 
-    if (config.max_detections > 0 && detections.size() > static_cast<size_t>(config.max_detections))
+    if (maxDetections > 0 && detections.size() > static_cast<size_t>(maxDetections))
     {
-        const auto kth = detections.begin() + config.max_detections;
+        const auto kth = detections.begin() + maxDetections;
         std::nth_element(
             detections.begin(),
             kth,
             detections.end(),
             [](const Detection& a, const Detection& b) { return a.confidence > b.confidence; });
-        detections.resize(static_cast<size_t>(config.max_detections));
+        detections.resize(static_cast<size_t>(maxDetections));
     }
 
     std::sort(
@@ -554,6 +555,7 @@ std::vector<std::vector<Detection>> DirectMLDetector::detectBatch(const std::vec
     std::vector<std::vector<Detection>> batchDetections(batch_size);
     float conf_thr = config.confidence_threshold;
     float nms_thr = config.nms_threshold;
+    int max_detections = std::max(1, config.max_detections);
 
     auto t4 = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> nmsTimeTmp{ 0 };
@@ -590,6 +592,7 @@ std::vector<std::vector<Detection>> DirectMLDetector::detectBatch(const std::vec
                 target_h,
                 conf_thr,
                 nms_thr,
+                max_detections,
                 &nmsTimeTmp);
 
             if (useFixed && (target_w != config.detection_resolution || target_h != config.detection_resolution))
@@ -641,7 +644,7 @@ std::vector<std::vector<Detection>> DirectMLDetector::detectBatch(const std::vec
         std::vector<Detection> detections;
 
         std::vector<int64_t> shp = { static_cast<int64_t>(rows), static_cast<int64_t>(cols) };
-        detections = postProcessYoloDML(ptr, shp, num_classes, conf_thr, nms_thr, &nmsTimeTmp);
+        detections = postProcessYoloDML(ptr, shp, num_classes, conf_thr, nms_thr, max_detections, &nmsTimeTmp);
 
         if (useFixed && (target_w != config.detection_resolution || target_h != config.detection_resolution))
         {

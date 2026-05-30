@@ -113,6 +113,21 @@ static inline int ClampInt(int v, int lo, int hi)
     return (v < lo) ? lo : (v > hi) ? hi : v;
 }
 
+struct OverlayThreadConfigSnapshot
+{
+    std::vector<std::string> buttonOpenOverlay;
+    bool excludeFromCapture = true;
+};
+
+static OverlayThreadConfigSnapshot SnapshotOverlayThreadConfig()
+{
+    std::lock_guard<std::mutex> lock(configMutex);
+    OverlayThreadConfigSnapshot snapshot;
+    snapshot.buttonOpenOverlay = config.button_open_overlay;
+    snapshot.excludeFromCapture = config.overlay_exclude_from_capture;
+    return snapshot;
+}
+
 static float ComputeRuntimeUiScale()
 {
     return std::clamp(config.overlay_ui_scale, 0.85f, 1.35f);
@@ -1317,7 +1332,9 @@ void OverlayThread()
 
     MSG msg;
     ZeroMemory(&msg, sizeof(msg));
-    bool lastExcludeFromCapture = config.overlay_exclude_from_capture;
+    OverlayThreadConfigSnapshot overlayCfg = SnapshotOverlayThreadConfig();
+    bool lastExcludeFromCapture = overlayCfg.excludeFromCapture;
+    bool overlayHotkeyWasDown = false;
     Overlay_SetDisplayAffinity(g_hwnd, lastExcludeFromCapture);
 
     while (!shouldExit)
@@ -1334,13 +1351,16 @@ void OverlayThread()
         }
         if (shouldExit) break;
 
-        if (lastExcludeFromCapture != config.overlay_exclude_from_capture)
+        overlayCfg = SnapshotOverlayThreadConfig();
+
+        if (lastExcludeFromCapture != overlayCfg.excludeFromCapture)
         {
-            lastExcludeFromCapture = config.overlay_exclude_from_capture;
+            lastExcludeFromCapture = overlayCfg.excludeFromCapture;
             Overlay_SetDisplayAffinity(g_hwnd, lastExcludeFromCapture);
         }
 
-        if (isAnyKeyPressed(config.button_open_overlay) & 0x1)
+        const bool overlayHotkeyDown = isAnyKeyPressedWin32Only(overlayCfg.buttonOpenOverlay);
+        if (overlayHotkeyDown && !overlayHotkeyWasDown)
         {
             show_overlay = !show_overlay;
             g_overlayVisible = show_overlay;
@@ -1360,13 +1380,12 @@ void OverlayThread()
                 }
                 ShowWindow(g_hwnd, SW_HIDE);
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
+        overlayHotkeyWasDown = overlayHotkeyDown;
 
         if (!show_overlay)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
 
