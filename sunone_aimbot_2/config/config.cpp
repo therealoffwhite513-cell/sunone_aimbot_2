@@ -200,6 +200,10 @@ bool Config::loadConfig(const std::string& filename)
         overlay_opacity = 225;
         overlay_ui_scale = 1.0f;
         overlay_exclude_from_capture = true;
+        overlay_x = 0;
+        overlay_y = 0;
+        overlay_width = 860;
+        overlay_height = 526;
 
         // Depth
         depth_inference_enabled = true;
@@ -540,6 +544,10 @@ bool Config::loadConfig(const std::string& filename)
     overlay_opacity = get_long("overlay_opacity", 225);
     overlay_ui_scale = (float)get_double("overlay_ui_scale", 1.0);
     overlay_exclude_from_capture = get_bool("overlay_exclude_from_capture", true);
+    overlay_x = get_long("overlay_x", 0);
+    overlay_y = get_long("overlay_y", 0);
+    overlay_width = get_long("overlay_width", 860);
+    overlay_height = get_long("overlay_height", 526);
 
     // Depth
     depth_inference_enabled = get_bool("depth_inference_enabled", true);
@@ -646,6 +654,11 @@ bool Config::loadConfig(const std::string& filename)
     if (kalman_additional_prediction_ms > 120.0f) kalman_additional_prediction_ms = 120.0f;
     if (kalman_reset_timeout_sec < 0.05f) kalman_reset_timeout_sec = 0.05f;
     if (kalman_reset_timeout_sec > 3.0f) kalman_reset_timeout_sec = 3.0f;
+
+    if (overlay_width < 560) overlay_width = 560;
+    if (overlay_width > 3840) overlay_width = 3840;
+    if (overlay_height < 340) overlay_height = 340;
+    if (overlay_height > 2160) overlay_height = 2160;
 
     if (aim_sim_width < 220) aim_sim_width = 220;
     if (aim_sim_width > 1920) aim_sim_width = 1920;
@@ -880,7 +893,12 @@ bool Config::saveConfig(const std::string& filename)
         << "overlay_opacity = " << overlay_opacity << "\n"
         << std::fixed << std::setprecision(2)
         << "overlay_ui_scale = " << overlay_ui_scale << "\n"
-        << "overlay_exclude_from_capture = " << (overlay_exclude_from_capture ? "true" : "false") << "\n\n";
+        << "overlay_exclude_from_capture = " << (overlay_exclude_from_capture ? "true" : "false") << "\n"
+        << std::setprecision(0)
+        << "overlay_x = " << overlay_x << "\n"
+        << "overlay_y = " << overlay_y << "\n"
+        << "overlay_width = " << overlay_width << "\n"
+        << "overlay_height = " << overlay_height << "\n\n";
 
     file << "# Depth\n"
         << "depth_inference_enabled = " << (depth_inference_enabled ? "true" : "false") << "\n"

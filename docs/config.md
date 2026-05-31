@@ -265,6 +265,10 @@ Use `None` to disable a button where supported.
 | `overlay_opacity` | `225` | Overlay opacity, `0..255`. |
 | `overlay_ui_scale` | `1.0` | Overlay UI scale. |
 | `overlay_exclude_from_capture` | `true` | Attempts to keep overlay out of captured frames. |
+| `overlay_x` | `0` | Overlay editor window X position. Auto-saved after moving. |
+| `overlay_y` | `0` | Overlay editor window Y position. Auto-saved after moving. |
+| `overlay_width` | `860` | Overlay editor window width. Auto-saved after resizing. |
+| `overlay_height` | `526` | Overlay editor window height. Auto-saved after resizing. |
 
 ## Depth
 

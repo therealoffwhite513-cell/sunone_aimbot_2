@@ -90,6 +90,7 @@ static WPARAM g_manualWindowDragHit = HTNOWHERE;
 static POINT g_manualWindowDragStartPoint{};
 static RECT g_manualWindowDragStartRect{};
 static int g_activeOverlayTab = 0;
+static bool g_pendingOverlayGeometryDirty = false;
 
 std::vector<std::string> availableModels;
 std::vector<std::string> key_names;
@@ -100,7 +101,8 @@ ID3D11ShaderResourceView* body_texture = nullptr;
 static UINT GetDpiForWindowSafe(HWND hwnd);
 static RECT GetOverlayWorkArea(HWND hwnd);
 static void ClampOverlayToWorkArea(HWND hwnd, int& x, int& y, int& w, int& h);
-static void EnsureOverlayInsideWorkArea(HWND hwnd);
+static void EnsureOverlayInsideWorkArea(HWND hwnd, bool persistGeometry = false);
+static bool StoreOverlayWindowGeometry(HWND hwnd, bool markDirty);
 static bool ResizeOverlayBackBuffer(UINT width, UINT height);
 static HRESULT RenderOverlayFrame(bool allowAutoResize, bool allowConfigSave);
 
@@ -614,9 +616,26 @@ static RECT GetOverlayWorkArea(HWND hwnd)
     return work;
 }
 
+static RECT GetOverlayWorkAreaForRect(const RECT& rect)
+{
+    HMONITOR monitor = ::MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{};
+    mi.cbSize = sizeof(mi);
+    if (monitor && ::GetMonitorInfo(monitor, &mi))
+        return mi.rcWork;
+
+    return GetOverlayWorkArea(nullptr);
+}
+
 static void ClampOverlayToWorkArea(HWND hwnd, int& x, int& y, int& w, int& h)
 {
-    const RECT work = GetOverlayWorkArea(hwnd);
+    const RECT desiredRect = {
+        x,
+        y,
+        x + OtherTools::MaxInt(1, w),
+        y + OtherTools::MaxInt(1, h)
+    };
+    const RECT work = hwnd ? GetOverlayWorkArea(hwnd) : GetOverlayWorkAreaForRect(desiredRect);
     const UINT dpi = hwnd ? GetDpiForWindowSafe(hwnd) : 96;
 
     const int minW = ::MulDiv(MIN_OVERLAY_W, (int)dpi, 96);
@@ -637,7 +656,56 @@ static void ClampOverlayToWorkArea(HWND hwnd, int& x, int& y, int& w, int& h)
     y = ClampInt(y, static_cast<int>(work.top), maxY);
 }
 
-static void EnsureOverlayInsideWorkArea(HWND hwnd)
+static void MarkOverlayGeometryDirty()
+{
+    if (ImGui::GetCurrentContext())
+    {
+        OverlayConfig_MarkDirty();
+    }
+    else
+    {
+        g_pendingOverlayGeometryDirty = true;
+    }
+}
+
+static bool StoreOverlayWindowGeometry(HWND hwnd, bool markDirty)
+{
+    if (!hwnd)
+        return false;
+
+    RECT wndRect{};
+    if (!::GetWindowRect(hwnd, &wndRect))
+        return false;
+
+    const int x = wndRect.left;
+    const int y = wndRect.top;
+    const int w = wndRect.right - wndRect.left;
+    const int h = wndRect.bottom - wndRect.top;
+
+    bool changed = false;
+    {
+        std::lock_guard<std::mutex> lock(configMutex);
+        changed = config.overlay_x != x ||
+                  config.overlay_y != y ||
+                  config.overlay_width != w ||
+                  config.overlay_height != h;
+
+        if (changed)
+        {
+            config.overlay_x = x;
+            config.overlay_y = y;
+            config.overlay_width = w;
+            config.overlay_height = h;
+        }
+    }
+
+    if (changed && markDirty)
+        MarkOverlayGeometryDirty();
+
+    return changed;
+}
+
+static void EnsureOverlayInsideWorkArea(HWND hwnd, bool persistGeometry)
 {
     if (!hwnd)
         return;
@@ -659,6 +727,9 @@ static void EnsureOverlayInsideWorkArea(HWND hwnd)
 
     if (x != wndRect.left || y != wndRect.top || w != oldW || h != oldH)
         ::SetWindowPos(hwnd, NULL, x, y, w, h, SWP_NOZORDER);
+
+    if (persistGeometry)
+        StoreOverlayWindowGeometry(hwnd, true);
 }
 
 bool InitializeBlendState()
@@ -892,7 +963,7 @@ static void EndManualOverlayWindowDrag(HWND hwnd)
     if (::GetCapture() == hwnd)
         ::ReleaseCapture();
 
-    EnsureOverlayInsideWorkArea(hwnd);
+    EnsureOverlayInsideWorkArea(hwnd, true);
 }
 
 static void UpdateManualOverlayWindowDrag(HWND hwnd)
@@ -1045,7 +1116,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                 g_manualWindowDragActive = false;
                 g_manualWindowDragHit = HTNOWHERE;
-                EnsureOverlayInsideWorkArea(hWnd);
+                EnsureOverlayInsideWorkArea(hWnd, true);
                 return 0;
             }
             break;
@@ -1058,15 +1129,15 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_EXITSIZEMOVE:
         g_autoResizeEnabled = false;
-        EnsureOverlayInsideWorkArea(hWnd);
+        EnsureOverlayInsideWorkArea(hWnd, true);
         return 0;
 
     case WM_DISPLAYCHANGE:
-        EnsureOverlayInsideWorkArea(hWnd);
+        EnsureOverlayInsideWorkArea(hWnd, true);
         return 0;
 
     case WM_DPICHANGED:
-        EnsureOverlayInsideWorkArea(hWnd);
+        EnsureOverlayInsideWorkArea(hWnd, true);
         return 0;
 
     case WM_SIZE:
@@ -1119,19 +1190,29 @@ void SetupImGui()
     g_baseStyleReady = true;
     g_runtimeUiScale = -1.0f;
     load_body_texture();
+
+    if (g_pendingOverlayGeometryDirty)
+    {
+        g_pendingOverlayGeometryDirty = false;
+        OverlayConfig_MarkDirty();
+    }
 }
 
 bool CreateOverlayWindow()
 {
-    overlayWidth = BASE_OVERLAY_WIDTH;
-    overlayHeight = BASE_OVERLAY_HEIGHT;
+    int overlayX = config.overlay_x;
+    int overlayY = config.overlay_y;
+    overlayWidth = config.overlay_width > 0 ? config.overlay_width : BASE_OVERLAY_WIDTH;
+    overlayHeight = config.overlay_height > 0 ? config.overlay_height : BASE_OVERLAY_HEIGHT;
 
     {
-        int x = 0;
-        int y = 0;
+        int x = overlayX;
+        int y = overlayY;
         int w = overlayWidth;
         int h = overlayHeight;
         ClampOverlayToWorkArea(nullptr, x, y, w, h);
+        overlayX = x;
+        overlayY = y;
         overlayWidth = w;
         overlayHeight = h;
     }
@@ -1155,7 +1236,7 @@ bool CreateOverlayWindow()
     const DWORD exStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
     const DWORD style = WS_POPUP;
 
-    RECT wr = { 0, 0, overlayWidth, overlayHeight };
+    RECT wr = { overlayX, overlayY, overlayX + overlayWidth, overlayY + overlayHeight };
     ::AdjustWindowRectEx(&wr, style, FALSE, exStyle);
 
     const int wndW = wr.right - wr.left;
@@ -1165,13 +1246,13 @@ bool CreateOverlayWindow()
         exStyle,
         wc.lpszClassName, _T("Chrome"),
         style,
-        0, 0, wndW, wndH,
+        wr.left, wr.top, wndW, wndH,
         NULL, NULL, wc.hInstance, NULL);
 
     if (g_hwnd == NULL)
         return false;
 
-    EnsureOverlayInsideWorkArea(g_hwnd);
+    EnsureOverlayInsideWorkArea(g_hwnd, true);
 
     BOOL dwm = FALSE;
     if (SUCCEEDED(DwmIsCompositionEnabled(&dwm)) && dwm)
@@ -1368,12 +1449,13 @@ void OverlayThread()
             if (show_overlay)
             {
                 g_autoResizeEnabled = true;
-                EnsureOverlayInsideWorkArea(g_hwnd);
+                EnsureOverlayInsideWorkArea(g_hwnd, true);
                 ShowWindow(g_hwnd, SW_SHOW);
                 SetForegroundWindow(g_hwnd);
             }
             else
             {
+                StoreOverlayWindowGeometry(g_hwnd, true);
                 {
                     std::lock_guard<std::mutex> lock(configMutex);
                     OverlayConfig_SaveNow();
@@ -1397,6 +1479,7 @@ void OverlayThread()
     }
 
     {
+        StoreOverlayWindowGeometry(g_hwnd, true);
         std::lock_guard<std::mutex> lock(configMutex);
         OverlayConfig_SaveNow();
     }

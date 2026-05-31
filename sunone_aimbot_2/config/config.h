@@ -147,6 +147,10 @@ public:
     int overlay_opacity;
     float overlay_ui_scale;
     bool overlay_exclude_from_capture;
+    int overlay_x;
+    int overlay_y;
+    int overlay_width;
+    int overlay_height;
 
     // Depth
     bool depth_inference_enabled;
