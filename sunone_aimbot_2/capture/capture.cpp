@@ -597,19 +597,32 @@ void captureThread(int CAPTURE_WIDTH, int CAPTURE_HEIGHT)
         setCaptureUnavailable();
 
         TimerResolutionGuard timerResolution;
+        // Always request 1 ms timer resolution for the lifetime of the capture thread.
+        // The loop performs short sleeps or yields in the "no new frame" backoff paths
+        // (when capture_fps == 0 / unlimited) to avoid 100% CPU spin while waiting for
+        // Duplication API / WinRT to deliver a present. It also needs precise sleeps for
+        // the frame limiter when a cap is active.
+        // Without timeBeginPeriod(1), these round up to the default Windows timer
+        // resolution (~15.6 ms), throttling the capture loop (and reported captureFps)
+        // unless something else in the process (the overlay/GUI D3D presents + short
+        // sleep loops) has already bumped the resolution as a side effect.
+        timerResolution.Enable();
+
         std::optional<std::chrono::steady_clock::duration> frameDuration;
         auto updateFrameDuration = [&](int captureFpsSetting)
         {
             if (captureFpsSetting > 0)
             {
-                timerResolution.Enable();
                 const auto frameMs = std::chrono::duration<double, std::milli>(1000.0 / captureFpsSetting);
                 frameDuration = std::chrono::duration_cast<std::chrono::steady_clock::duration>(frameMs);
             }
             else
             {
-                timerResolution.Disable();
                 frameDuration.reset();
+                // Do NOT Disable() the timer resolution here. The 1 ms backoff sleeps
+                // (see the four sites below that check !frameDuration.has_value()) and
+                // the applyFrameLimiter pacing still require it when running unlimited.
+                // The guard's destructor will call timeEndPeriod(1) on thread exit.
             }
         };
         updateFrameDuration(currentCfg.capture_fps);
