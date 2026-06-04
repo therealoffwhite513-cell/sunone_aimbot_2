@@ -28,8 +28,8 @@ void draw_target()
 {
     if (OverlayUI::BeginSection("Targeting", "target_section_targeting"))
     {
-        ImGui::Checkbox("Disable Headshot", &config.disable_headshot);
-        ImGui::Checkbox("Auto Aim", &config.auto_aim);
+        OverlayUI::CheckboxRow("Disable Headshot", &config.disable_headshot);
+        OverlayUI::CheckboxRow("Auto Aim", &config.auto_aim);
         OverlayUI::EndSection();
     }
 
@@ -38,8 +38,8 @@ void draw_target()
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Arrow keys: Adjust body offset");
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Shift+Arrow keys: Adjust head offset");
 
-        ImGui::SliderFloat("Approximate Body Y Offset", &config.body_y_offset, 0.0f, 1.0f, "%.2f");
-        ImGui::SliderFloat("Approximate Head Y Offset", &config.head_y_offset, 0.0f, 1.0f, "%.2f");
+        OverlayUI::SliderFloatRow("Approximate Body Y Offset", &config.body_y_offset, 0.0f, 1.0f, "%.2f");
+        OverlayUI::SliderFloatRow("Approximate Head Y Offset", &config.head_y_offset, 0.0f, 1.0f, "%.2f");
         OverlayUI::EndSection();
     }
 

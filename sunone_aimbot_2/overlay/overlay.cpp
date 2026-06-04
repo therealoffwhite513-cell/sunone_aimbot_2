@@ -380,7 +380,7 @@ static const OverlayTabItem kOverlayTabs[] = {
 
     { "Input Device",  "Control", "Mouse backend, device connection and reconnect data.",draw_mouse_input,             SidebarIconKind::Mouse },
     { "Hotkeys",       "Control", "Bindings for aiming, shooting and runtime actions.",  draw_buttons,                 SidebarIconKind::Keyboard },
-    { "Editor",        "Control", "Overlay editor appearance and privacy options.",      draw_overlay,                 SidebarIconKind::Sliders },
+    { "Overlay",       "Control", "Overlay appearance and privacy options.",             draw_overlay,                 SidebarIconKind::Sliders },
 
     { "Game Render",   "Visuals", "In-game overlay lifetime, FPS and render toggles.",   draw_game_overlay_general,    SidebarIconKind::Monitor },
     { "Render Style",  "Visuals", "Boxes, capture frame and future point styling.",      draw_game_overlay_visuals,    SidebarIconKind::Palette },

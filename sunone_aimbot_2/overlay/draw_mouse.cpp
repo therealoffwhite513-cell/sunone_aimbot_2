@@ -69,27 +69,26 @@ static void draw_mouse_page(MouseSettingsPage page)
     if (shouldDrawMousePage(page, MouseSettingsPage::Movement) &&
         OverlayUI::BeginSection("FOV", "mouse_section_fov"))
     {
-        ImGui::SliderInt("FOV X", &config.fovX, 10, 120);
-        ImGui::SliderInt("FOV Y", &config.fovY, 10, 120);
+        OverlayUI::SliderIntRow("FOV X", &config.fovX, 10, 120);
+        OverlayUI::SliderIntRow("FOV Y", &config.fovY, 10, 120);
         OverlayUI::EndSection();
     }
 
     if (shouldDrawMousePage(page, MouseSettingsPage::Movement) &&
         OverlayUI::BeginSection("Speed Multiplier", "mouse_section_speed_multiplier"))
     {
-        ImGui::SliderFloat("Min Speed Multiplier", &config.minSpeedMultiplier, 0.1f, 5.0f, "%.1f");
-        ImGui::SliderFloat("Max Speed Multiplier", &config.maxSpeedMultiplier, 0.1f, 5.0f, "%.1f");
+        OverlayUI::SliderFloatRow("Min Speed Multiplier", &config.minSpeedMultiplier, 0.1f, 5.0f, "%.1f");
+        OverlayUI::SliderFloatRow("Max Speed Multiplier", &config.maxSpeedMultiplier, 0.1f, 5.0f, "%.1f");
         OverlayUI::EndSection();
     }
 
     if (shouldDrawMousePage(page, MouseSettingsPage::Prediction) &&
         OverlayUI::BeginSection("Prediction", "mouse_section_prediction"))
     {
-        ImGui::SliderFloat("Prediction Interval", &config.predictionInterval, 0.00f, 0.5f, "%.2f");
+        OverlayUI::SliderFloatRow("Prediction Interval", &config.predictionInterval, 0.00f, 0.5f, "%.2f");
         if (config.predictionInterval == 0.00f)
         {
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(255, 0, 0, 255), "-> Disabled");
+            OverlayUI::TextRow("Prediction is disabled.", IM_COL32(255, 108, 108, 255));
         }
 
         const bool predictionEnabled = (config.predictionInterval > 0.0f);
@@ -98,13 +97,12 @@ static void draw_mouse_page(MouseSettingsPage page)
             ImGui::BeginDisabled();
         }
         
-        if (ImGui::SliderInt("Future Positions", &config.prediction_futurePositions, 1, 40))
+        if (OverlayUI::SliderIntRow("Future Positions", &config.prediction_futurePositions, 1, 40))
         {
             OverlayConfig_MarkDirty();
         }
         
-        ImGui::SameLine();
-        if (ImGui::Checkbox("Draw##draw_future_positions_button", &config.draw_futurePositions))
+        if (OverlayUI::CheckboxRow("Draw Future Positions", &config.draw_futurePositions))
         {
             OverlayConfig_MarkDirty();
         }
@@ -116,52 +114,52 @@ static void draw_mouse_page(MouseSettingsPage page)
         }
 
         ImGui::Separator();
-        if (ImGui::Checkbox("Enable Kalman Filter", &config.kalman_enabled))
+        if (OverlayUI::CheckboxRow("Enable Kalman Filter", &config.kalman_enabled))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Kalman Process Noise Pos", &config.kalman_process_noise_position, 0.001f, 5000.0f, "%.3f"))
+        if (OverlayUI::SliderFloatRow("Kalman Process Noise Pos", &config.kalman_process_noise_position, 0.001f, 5000.0f, "%.3f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Kalman Process Noise Vel", &config.kalman_process_noise_velocity, 0.001f, 50000.0f, "%.3f"))
+        if (OverlayUI::SliderFloatRow("Kalman Process Noise Vel", &config.kalman_process_noise_velocity, 0.001f, 50000.0f, "%.3f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Kalman Measurement Noise", &config.kalman_measurement_noise, 0.001f, 5000.0f, "%.3f"))
+        if (OverlayUI::SliderFloatRow("Kalman Measurement Noise", &config.kalman_measurement_noise, 0.001f, 5000.0f, "%.3f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Kalman Velocity Damping", &config.kalman_velocity_damping, 0.0f, 3.0f, "%.3f"))
+        if (OverlayUI::SliderFloatRow("Kalman Velocity Damping", &config.kalman_velocity_damping, 0.0f, 3.0f, "%.3f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Kalman Max Velocity", &config.kalman_max_velocity, 100.0f, 60000.0f, "%.0f"))
+        if (OverlayUI::SliderFloatRow("Kalman Max Velocity", &config.kalman_max_velocity, 100.0f, 60000.0f, "%.0f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderInt("Kalman Warmup Frames", &config.kalman_warmup_frames, 0, 20))
+        if (OverlayUI::SliderIntRow("Kalman Warmup Frames", &config.kalman_warmup_frames, 0, 20))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::Checkbox("Kalman Compensate Inference Delay", &config.kalman_compensate_detection_delay))
+        if (OverlayUI::CheckboxRow("Kalman Compensate Inference Delay", &config.kalman_compensate_detection_delay))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Kalman Additional Predict (ms)", &config.kalman_additional_prediction_ms, -80.0f, 120.0f, "%.1f"))
+        if (OverlayUI::SliderFloatRow("Kalman Additional Predict (ms)", &config.kalman_additional_prediction_ms, -80.0f, 120.0f, "%.1f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Kalman Reset Timeout (s)", &config.kalman_reset_timeout_sec, 0.05f, 3.0f, "%.2f"))
+        if (OverlayUI::SliderFloatRow("Kalman Reset Timeout (s)", &config.kalman_reset_timeout_sec, 0.05f, 3.0f, "%.2f"))
         {
             OverlayConfig_MarkDirty();
         }
@@ -172,10 +170,10 @@ static void draw_mouse_page(MouseSettingsPage page)
     if (shouldDrawMousePage(page, MouseSettingsPage::Movement) &&
         OverlayUI::BeginSection("Target correction", "mouse_section_target_correction"))
     {
-        ImGui::SliderFloat("Snap Radius", &config.snapRadius, 0.1f, 5.0f, "%.1f");
-        ImGui::SliderFloat("Near Radius", &config.nearRadius, 1.0f, 40.0f, "%.1f");
-        ImGui::SliderFloat("Speed Curve Exponent", &config.speedCurveExponent, 0.1f, 10.0f, "%.1f");
-        ImGui::SliderFloat("Snap Boost Factor", &config.snapBoostFactor, 0.01f, 4.00f, "%.2f");
+        OverlayUI::SliderFloatRow("Snap Radius", &config.snapRadius, 0.1f, 5.0f, "%.1f");
+        OverlayUI::SliderFloatRow("Near Radius", &config.nearRadius, 1.0f, 40.0f, "%.1f");
+        OverlayUI::SliderFloatRow("Speed Curve Exponent", &config.speedCurveExponent, 0.1f, 10.0f, "%.1f");
+        OverlayUI::SliderFloatRow("Snap Boost Factor", &config.snapBoostFactor, 0.01f, 4.00f, "%.2f");
         OverlayUI::EndSection();
     }
 
@@ -201,7 +199,7 @@ static void draw_mouse_page(MouseSettingsPage page)
         for (const auto& name : profile_names)
             profile_items.push_back(name.c_str());
 
-        if (ImGui::Combo("Active Game Profile", &selected_index, profile_items.data(), static_cast<int>(profile_items.size())))
+        if (OverlayUI::ComboRow("Active Game Profile", &selected_index, profile_items.data(), static_cast<int>(profile_items.size())))
         {
             config.active_game = profile_names[selected_index];
             OverlayConfig_MarkDirty();
@@ -235,14 +233,14 @@ static void draw_mouse_page(MouseSettingsPage page)
             float pitch_f = static_cast<float>(modifiable.pitch);
             float baseFOV_f = static_cast<float>(modifiable.baseFOV);
 
-            changed |= ImGui::SliderFloat("Sensitivity", &sens_f, 0.001f, 10.0f, "%.4f");
-            changed |= ImGui::SliderFloat("Yaw", &yaw_f, 0.001f, 0.1f, "%.4f");
-            changed |= ImGui::SliderFloat("Pitch", &pitch_f, 0.001f, 0.1f, "%.4f");
+            changed |= OverlayUI::SliderFloatRow("Sensitivity", &sens_f, 0.001f, 10.0f, "%.4f");
+            changed |= OverlayUI::SliderFloatRow("Yaw", &yaw_f, 0.001f, 0.1f, "%.4f");
+            changed |= OverlayUI::SliderFloatRow("Pitch", &pitch_f, 0.001f, 0.1f, "%.4f");
 
-            changed |= ImGui::Checkbox("FOV Scaled", &modifiable.fovScaled);
+            changed |= OverlayUI::CheckboxRow("FOV Scaled", &modifiable.fovScaled);
             if (modifiable.fovScaled)
             {
-                changed |= ImGui::SliderFloat("Base FOV", &baseFOV_f, 10.0f, 180.0f, "%.1f");
+                changed |= OverlayUI::SliderFloatRow("Base FOV", &baseFOV_f, 10.0f, 180.0f, "%.1f");
             }
 
             if (changed)
@@ -265,9 +263,18 @@ static void draw_mouse_page(MouseSettingsPage page)
         OverlayUI::BeginSection("Manage Profiles", "mouse_section_manage_profiles"))
     {
         static char new_profile_name[64] = "";
-        ImGui::InputText("New profile name", new_profile_name, sizeof(new_profile_name));
-        ImGui::SameLine();
-        if (ImGui::Button("Add Profile"))
+        bool addProfile = false;
+        {
+            const auto row = OverlayUI::BeginSettingRow("New profile name");
+            const float buttonW = 96.0f;
+            const float inputW = std::max(1.0f, row.controlWidth - buttonW - ImGui::GetStyle().ItemSpacing.x);
+            ImGui::SetNextItemWidth(inputW);
+            ImGui::InputText("##value", new_profile_name, sizeof(new_profile_name));
+            ImGui::SameLine();
+            addProfile = ImGui::Button("Add", ImVec2(buttonW, 0.0f));
+            OverlayUI::EndSettingRow(row);
+        }
+        if (addProfile)
         {
             std::string name = std::string(new_profile_name);
             if (!name.empty() && config.game_profiles.count(name) == 0)
@@ -290,7 +297,7 @@ static void draw_mouse_page(MouseSettingsPage page)
         if (gp.name != "UNIFIED")
         {
             ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(200, 50, 50, 255));
-            if (ImGui::Button("Delete Current Profile"))
+            if (OverlayUI::ButtonRow("Profile", "Delete Current Profile", "delete_current_profile"))
             {
                 config.game_profiles.erase(gp.name);
                 if (config.game_profiles.count("UNIFIED") != 0)
@@ -311,7 +318,7 @@ static void draw_mouse_page(MouseSettingsPage page)
     if (shouldDrawMousePage(page, MouseSettingsPage::Assist) &&
         OverlayUI::BeginSection("Easy No Recoil", "mouse_section_easy_no_recoil"))
     {
-        if (ImGui::Checkbox("Easy No Recoil", &config.easynorecoil))
+        if (OverlayUI::CheckboxRow("Easy No Recoil", &config.easynorecoil))
         {
             OverlayConfig_MarkDirty();
         }
@@ -321,7 +328,7 @@ static void draw_mouse_page(MouseSettingsPage page)
             ImGui::BeginDisabled();
         }
 
-        if (ImGui::SliderFloat("No Recoil Strength", &config.easynorecoilstrength, 0.1f, 500.0f, "%.1f"))
+        if (OverlayUI::SliderFloatRow("No Recoil Strength", &config.easynorecoilstrength, 0.1f, 500.0f, "%.1f"))
         {
             OverlayConfig_MarkDirty();
         }
@@ -345,13 +352,13 @@ static void draw_mouse_page(MouseSettingsPage page)
     if (shouldDrawMousePage(page, MouseSettingsPage::Assist) &&
         OverlayUI::BeginSection("Auto Shoot", "mouse_section_auto_shoot"))
     {
-        ImGui::Checkbox("Auto Shoot", &config.auto_shoot);
+        OverlayUI::CheckboxRow("Auto Shoot", &config.auto_shoot);
         if (!config.auto_shoot)
         {
             ImGui::BeginDisabled();
         }
 
-        ImGui::SliderFloat("bScope Multiplier", &config.bScope_multiplier, 0.5f, 2.0f, "%.1f");
+        OverlayUI::SliderFloatRow("bScope Multiplier", &config.bScope_multiplier, 0.5f, 2.0f, "%.1f");
 
         if (!config.auto_shoot)
         {
@@ -365,7 +372,7 @@ static void draw_mouse_page(MouseSettingsPage page)
     if (shouldDrawMousePage(page, MouseSettingsPage::Movement) &&
         OverlayUI::BeginSection("Wind Mouse", "mouse_section_wind_mouse"))
     {
-        if (ImGui::Checkbox("Enable WindMouse", &config.wind_mouse_enabled))
+        if (OverlayUI::CheckboxRow("Enable WindMouse", &config.wind_mouse_enabled))
         {
             OverlayConfig_MarkDirty();
         }
@@ -375,27 +382,27 @@ static void draw_mouse_page(MouseSettingsPage page)
             ImGui::BeginDisabled();
         }
 
-        if (ImGui::SliderFloat("Gravity force", &config.wind_G, 4.00f, 40.00f, "%.2f"))
+        if (OverlayUI::SliderFloatRow("Gravity force", &config.wind_G, 4.00f, 40.00f, "%.2f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Wind fluctuation", &config.wind_W, 1.00f, 40.00f, "%.2f"))
+        if (OverlayUI::SliderFloatRow("Wind fluctuation", &config.wind_W, 1.00f, 40.00f, "%.2f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Max step (velocity clip)", &config.wind_M, 1.00f, 40.00f, "%.2f"))
+        if (OverlayUI::SliderFloatRow("Max step (velocity clip)", &config.wind_M, 1.00f, 40.00f, "%.2f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::SliderFloat("Distance where behaviour changes", &config.wind_D, 1.00f, 40.00f, "%.2f"))
+        if (OverlayUI::SliderFloatRow("Distance where behaviour changes", &config.wind_D, 1.00f, 40.00f, "%.2f"))
         {
             OverlayConfig_MarkDirty();
         }
 
-        if (ImGui::Button("Reset Wind Mouse to default settings"))
+        if (OverlayUI::ButtonRow("Wind Mouse", "Reset to defaults", "reset_wind_mouse_defaults"))
         {
             config.wind_G = 18.0f;
             config.wind_W = 15.0f;
@@ -435,7 +442,7 @@ static void draw_mouse_page(MouseSettingsPage page)
             }
         }
 
-        if (ImGui::Combo("Mouse Input Method", &input_method_index, method_items.data(), static_cast<int>(method_items.size())))
+        if (OverlayUI::ComboRow("Mouse Input Method", &input_method_index, method_items.data(), static_cast<int>(method_items.size())))
         {
             std::string new_input_method = input_methods[input_method_index];
 
@@ -484,7 +491,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                 }
             }
 
-            if (ImGui::Combo(config.input_method == "TEENSY41" ? "Teensy Port" : "Arduino Port", &port_index, port_items.data(), static_cast<int>(port_items.size())))
+            if (OverlayUI::ComboRow(config.input_method == "TEENSY41" ? "Teensy Port" : "Arduino Port", &port_index, port_items.data(), static_cast<int>(port_items.size())))
             {
                 config.arduino_port = port_list[port_index];
                 OverlayConfig_MarkDirty();
@@ -515,7 +522,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                 }
             }
 
-            if (ImGui::Combo(config.input_method == "TEENSY41" ? "Teensy Baudrate" : "Arduino Baudrate", &baud_rate_index, baud_rate_items.data(), static_cast<int>(baud_rate_items.size())))
+            if (OverlayUI::ComboRow(config.input_method == "TEENSY41" ? "Teensy Baudrate" : "Arduino Baudrate", &baud_rate_index, baud_rate_items.data(), static_cast<int>(baud_rate_items.size())))
             {
                 config.arduino_baudrate = baud_rate_list[baud_rate_index];
                 OverlayConfig_MarkDirty();
@@ -528,12 +535,12 @@ static void draw_mouse_page(MouseSettingsPage page)
             }
             else
             {
-                if (ImGui::Checkbox("Arduino 16-bit Mouse", &config.arduino_16_bit_mouse))
+                if (OverlayUI::CheckboxRow("Arduino 16-bit Mouse", &config.arduino_16_bit_mouse))
                 {
                     OverlayConfig_MarkDirty();
                     input_method_changed.store(true);
                 }
-                if (ImGui::Checkbox("Arduino Enable Keys", &config.arduino_enable_keys))
+                if (OverlayUI::CheckboxRow("Arduino Enable Keys", &config.arduino_enable_keys))
                 {
                     OverlayConfig_MarkDirty();
                     input_method_changed.store(true);
@@ -577,7 +584,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                 }
             }
 
-            if (ImGui::Combo("RP2350 Port", &port_index, port_items.data(), static_cast<int>(port_items.size())))
+            if (OverlayUI::ComboRow("RP2350 Port", &port_index, port_items.data(), static_cast<int>(port_items.size())))
             {
                 config.rp2350_port = port_list[port_index];
                 OverlayConfig_MarkDirty();
@@ -608,19 +615,19 @@ static void draw_mouse_page(MouseSettingsPage page)
                 }
             }
 
-            if (ImGui::Combo("RP2350 Baudrate", &baud_rate_index, baud_rate_items.data(), static_cast<int>(baud_rate_items.size())))
+            if (OverlayUI::ComboRow("RP2350 Baudrate", &baud_rate_index, baud_rate_items.data(), static_cast<int>(baud_rate_items.size())))
             {
                 config.rp2350_baudrate = baud_rate_list[baud_rate_index];
                 OverlayConfig_MarkDirty();
                 input_method_changed.store(true);
             }
 
-            if (ImGui::Checkbox("RP2350 16-bit Mouse", &config.rp2350_16_bit_mouse))
+            if (OverlayUI::CheckboxRow("RP2350 16-bit Mouse", &config.rp2350_16_bit_mouse))
             {
                 OverlayConfig_MarkDirty();
                 input_method_changed.store(true);
             }
-            if (ImGui::Checkbox("RP2350 Enable Keys", &config.rp2350_enable_keys))
+            if (OverlayUI::CheckboxRow("RP2350 Enable Keys", &config.rp2350_enable_keys))
             {
                 OverlayConfig_MarkDirty();
                 input_method_changed.store(true);
@@ -636,7 +643,7 @@ static void draw_mouse_page(MouseSettingsPage page)
             else
             {
                 ImGui::Text("The wrong version of Ghub is installed or the path to Ghub is not set by default.\nDefault system path: C:\\Program Files\\LGHUB");
-                if (ImGui::Button("GHub Docs"))
+                if (OverlayUI::ButtonRow("GHub", "Open GHub Docs", "ghub_docs"))
                 {
                     ShellExecute(0, 0, L"https://github.com/SunOner/sunone_aimbot_2/blob/main/docs/guides.md#g-hub-input-method", 0, 0, SW_SHOW);
                 }
@@ -692,16 +699,16 @@ static void draw_mouse_page(MouseSettingsPage page)
                 reconnect_ms = config.teensy_hid_reconnect_interval_ms;
             }
 
-            ImGui::InputText("Serial", serial, sizeof(serial));
-            ImGui::InputText("VID filter", vid, sizeof(vid));
-            ImGui::InputText("PID filter", pid, sizeof(pid));
-            ImGui::InputInt("Usage Page", &usage_page);
-            ImGui::InputInt("Usage ID", &usage_id);
-            ImGui::InputInt("Open Index", &open_index);
-            ImGui::InputInt("Packet Timeout ms", &timeout_ms);
-            ImGui::InputInt("Reconnect ms", &reconnect_ms);
+            OverlayUI::InputTextRow("Serial", serial, sizeof(serial));
+            OverlayUI::InputTextRow("VID filter", vid, sizeof(vid));
+            OverlayUI::InputTextRow("PID filter", pid, sizeof(pid));
+            OverlayUI::InputIntRow("Usage Page", &usage_page);
+            OverlayUI::InputIntRow("Usage ID", &usage_id);
+            OverlayUI::InputIntRow("Open Index", &open_index);
+            OverlayUI::InputIntRow("Packet Timeout ms", &timeout_ms);
+            OverlayUI::InputIntRow("Reconnect ms", &reconnect_ms);
 
-            if (ImGui::Button("Save & Reconnect##teensy_hid"))
+            if (OverlayUI::ButtonRow("Teensy HID", "Save & Reconnect", "teensy_hid_save_reconnect"))
             {
                 config.teensy_hid_serial = serial;
                 config.teensy_hid_vid_filter = vid;
@@ -758,11 +765,11 @@ static void draw_mouse_page(MouseSettingsPage page)
                 last_uuid = config.kmbox_net_uuid;
             }
 
-            ImGui::InputText("IP", ip, sizeof(ip));
-            ImGui::InputText("Port", port, sizeof(port));
-            ImGui::InputText("UUID", uuid, sizeof(uuid));
+            OverlayUI::InputTextRow("IP", ip, sizeof(ip));
+            OverlayUI::InputTextRow("Port", port, sizeof(port));
+            OverlayUI::InputTextRow("UUID", uuid, sizeof(uuid));
 
-            if (ImGui::Button("Save & Reconnect"))
+            if (OverlayUI::ButtonRow("kmboxNet", "Save & Reconnect", "kmbox_net_save_reconnect"))
             {
                 config.kmbox_net_ip = ip;
                 config.kmbox_net_port = port;
@@ -796,7 +803,7 @@ static void draw_mouse_page(MouseSettingsPage page)
             if (!kmboxNetConnected)
                 ImGui::BeginDisabled();
 
-            if (ImGui::Button("Reboot box"))
+            if (OverlayUI::ButtonRow("kmboxNet box", "Reboot box", "kmbox_net_reboot"))
             {
                 std::lock_guard<std::mutex> lock(inputDevicesMutex);
                 KmboxNetConnection* device =
@@ -807,7 +814,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                     device->reboot();
             }
 
-            if (ImGui::Button("Change Kmbox image"))
+            if (OverlayUI::ButtonRow("kmboxNet image", "Change image", "kmbox_net_image"))
             {
                 std::lock_guard<std::mutex> lock(inputDevicesMutex);
                 KmboxNetConnection* device =
@@ -836,10 +843,10 @@ static void draw_mouse_page(MouseSettingsPage page)
                 last_pidvid = config.kmbox_a_pidvid;
             }
 
-            ImGui::InputText("PIDVID", pidvid, sizeof(pidvid));
+            OverlayUI::InputTextRow("PIDVID", pidvid, sizeof(pidvid));
             ImGui::TextDisabled("Format: PPPPVVVV (one field)");
 
-            if (ImGui::Button("Save & Reconnect##kmbox_a"))
+            if (OverlayUI::ButtonRow("kmboxA", "Save & Reconnect", "kmbox_a_save_reconnect"))
             {
                 config.kmbox_a_pidvid = pidvid;
                 last_pidvid = config.kmbox_a_pidvid;
@@ -881,7 +888,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                 }
             }
 
-            if (ImGui::Combo("Makcu Port", &port_index, port_items.data(), static_cast<int>(port_items.size())))
+            if (OverlayUI::ComboRow("Makcu Port", &port_index, port_items.data(), static_cast<int>(port_items.size())))
             {
                 config.makcu_port = port_list[port_index];
                 OverlayConfig_MarkDirty();
@@ -909,7 +916,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                 }
             }
 
-            if (ImGui::Combo("Makcu Baudrate", &baud_index, baud_items.data(), static_cast<int>(baud_items.size())))
+            if (OverlayUI::ComboRow("Makcu Baudrate", &baud_index, baud_items.data(), static_cast<int>(baud_items.size())))
             {
                 config.makcu_baudrate = baud_list[baud_index];
                 OverlayConfig_MarkDirty();

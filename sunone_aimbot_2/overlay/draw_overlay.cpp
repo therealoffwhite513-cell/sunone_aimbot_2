@@ -46,11 +46,6 @@ void draw_overlay()
             OverlayUI::EndSettingRow(row);
         }
 
-        OverlayUI::EndSection();
-    }
-
-    if (OverlayUI::BeginSection("Capture Privacy", "overlay_section_capture_privacy"))
-    {
         {
             const auto row = OverlayUI::BeginSettingRow("Hide Overlays From Recording");
             if (ImGui::Checkbox("##hide_overlay_from_recording", &config.overlay_exclude_from_capture))
@@ -60,6 +55,7 @@ void draw_overlay()
             }
             OverlayUI::EndSettingRow(row);
         }
+
         OverlayUI::EndSection();
     }
 }

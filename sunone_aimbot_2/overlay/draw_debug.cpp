@@ -99,20 +99,20 @@ static bool drawScreenshotButtonRows()
     {
         std::string& currentKeyName = config.screenshot_button[i];
         int currentIndex = findDebugKeyIndexByName(currentKeyName);
+        const std::string rowLabel = (config.screenshot_button.size() > 1)
+            ? "Screenshot " + std::to_string(i + 1)
+            : "Screenshot";
 
         ImGui::PushID(static_cast<int>(i));
 
-        const float rowAvail = ImGui::GetContentRegionAvail().x;
+        const auto row = OverlayUI::BeginSettingRow(rowLabel.c_str());
         const float actionBtnW = ImGui::GetFrameHeight();
-        float comboWidth = rowAvail - (actionBtnW * 2.0f + ImGui::GetStyle().ItemSpacing.x * 2.0f);
-        const float comboMin = rowAvail * 0.56f;
-        if (comboWidth < comboMin)
-            comboWidth = comboMin;
+        float comboWidth = row.controlWidth - (actionBtnW * 2.0f + 7.0f);
         if (comboWidth < 1.0f)
             comboWidth = 1.0f;
         ImGui::SetNextItemWidth(comboWidth);
 
-        if (ImGui::Combo("##screenshot_binding_combo", &currentIndex, key_names_cstrs.data(), static_cast<int>(key_names_cstrs.size())))
+        if (ImGui::Combo("##value", &currentIndex, key_names_cstrs.data(), static_cast<int>(key_names_cstrs.size())))
         {
             currentKeyName = key_names[currentIndex];
             changed = true;
@@ -141,6 +141,7 @@ static bool drawScreenshotButtonRows()
             changed = true;
         }
 
+        OverlayUI::EndSettingRow(row);
         ImGui::PopID();
 
         if (removedCurrent)
@@ -247,48 +248,48 @@ static bool drawDataCollectionSection()
     if (!OverlayUI::BeginSection("Data Collection", "debug_section_data_collection"))
         return false;
 
-    changed |= ImGui::Checkbox("Collect data while playing", &config.collect_data_while_playing);
-    changed |= ImGui::Checkbox("Only when aimbot is active", &config.collect_only_when_aimbot_running);
-    changed |= ImGui::Checkbox("Only when targets exist", &config.collect_only_when_targets_present);
+    changed |= OverlayUI::CheckboxRow("Collect data while playing", &config.collect_data_while_playing);
+    changed |= OverlayUI::CheckboxRow("Only when aimbot is active", &config.collect_only_when_aimbot_running);
+    changed |= OverlayUI::CheckboxRow("Only when targets exist", &config.collect_only_when_targets_present);
 
     int saveEveryNFrames = config.collect_save_every_n_frames;
-    if (ImGui::SliderInt("Save every N frames", &saveEveryNFrames, 1, 120))
+    if (OverlayUI::SliderIntRow("Save every N frames", &saveEveryNFrames, 1, 120))
     {
         config.collect_save_every_n_frames = saveEveryNFrames;
         changed = true;
     }
 
     int jpegQuality = config.collect_jpeg_quality;
-    if (ImGui::SliderInt("JPEG quality", &jpegQuality, 50, 100))
+    if (OverlayUI::SliderIntRow("JPEG quality", &jpegQuality, 50, 100))
     {
         config.collect_jpeg_quality = jpegQuality;
         changed = true;
     }
 
-    if (ImGui::InputText("Output folder", g_collectOutputDirBuffer, sizeof(g_collectOutputDirBuffer)))
+    if (OverlayUI::InputTextRow("Output folder", g_collectOutputDirBuffer, sizeof(g_collectOutputDirBuffer)))
         changed |= applyDebugTextBuffer(config.collect_output_dir, g_collectOutputDirMirror, g_collectOutputDirBuffer);
 
     if (OverlayUI::BeginSubsection("Auto Label"))
     {
-        changed |= ImGui::Checkbox("Write YOLO txt labels", &config.auto_label_data);
+        changed |= OverlayUI::CheckboxRow("Write YOLO txt labels", &config.auto_label_data);
 
         ImGui::BeginDisabled(!config.auto_label_data);
 
         float minConf = config.auto_label_min_conf;
-        if (ImGui::SliderFloat("Min confidence", &minConf, 0.01f, 0.99f, "%.2f"))
+        if (OverlayUI::SliderFloatRow("Min confidence", &minConf, 0.01f, 0.99f, "%.2f"))
         {
             config.auto_label_min_conf = minConf;
             changed = true;
         }
 
         int maxBoxes = config.auto_label_max_boxes;
-        if (ImGui::SliderInt("Max boxes per file", &maxBoxes, 1, 100))
+        if (OverlayUI::SliderIntRow("Max boxes per file", &maxBoxes, 1, 100))
         {
             config.auto_label_max_boxes = maxBoxes;
             changed = true;
         }
 
-        if (ImGui::InputText("Class filter", g_collectClassFilterBuffer, sizeof(g_collectClassFilterBuffer)))
+        if (OverlayUI::InputTextRow("Class filter", g_collectClassFilterBuffer, sizeof(g_collectClassFilterBuffer)))
             changed |= applyDebugTextBuffer(config.auto_label_record_classes, g_collectClassFilterMirror, g_collectClassFilterBuffer);
 
         ImGui::TextDisabled("Leave class filter empty to record all classes. Use comma-separated ids like 0,1.");
@@ -309,11 +310,10 @@ static bool drawDataCollectionSection()
     else
         ImGui::TextDisabled("Status: idle");
 
-    if (ImGui::Button("Copy resolved path"))
+    if (OverlayUI::ButtonRow("Resolved folder", "Copy path", "copy_resolved_path"))
         ImGui::SetClipboardText(ui.resolved_output_dir.c_str());
 
-    ImGui::SameLine();
-    if (ImGui::Button("Reset collect counters"))
+    if (OverlayUI::ButtonRow("Collect counters", "Reset counters", "reset_collect_counters"))
         cvm::ResetDataCollectionRuntime();
 
     OverlayUI::EndSection();
@@ -465,15 +465,15 @@ void draw_debug()
         if (drawScreenshotButtonRows())
             changed = true;
 
-        if (ImGui::InputInt("Screenshot delay", &config.screenshot_delay, 50, 500))
+        if (OverlayUI::InputIntRow("Screenshot delay", &config.screenshot_delay, 50, 500))
             changed = true;
-        if (ImGui::Checkbox("Verbose console output", &config.verbose))
+        if (OverlayUI::CheckboxRow("Verbose console output", &config.verbose))
             changed = true;
 
         if (config.screenshot_delay < 0)
             config.screenshot_delay = 0;
 
-        if (ImGui::Button("Print OpenCV build information##button_cv2_build_info"))
+        if (OverlayUI::ButtonRow("OpenCV", "Print build information", "button_cv2_build_info"))
         {
             std::cout << cv::getBuildInformation() << std::endl;
         }

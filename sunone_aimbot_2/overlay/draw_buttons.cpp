@@ -24,7 +24,7 @@ int findKeyIndexByName(const std::string& keyName)
     return 0;
 }
 
-bool drawButtonBindingRows(const char* comboPrefix, std::vector<std::string>& bindings, bool keepAtLeastOne)
+bool drawButtonBindingRows(const char* rowLabel, std::vector<std::string>& bindings, bool keepAtLeastOne)
 {
     if (key_names_cstrs.empty())
     {
@@ -43,20 +43,20 @@ bool drawButtonBindingRows(const char* comboPrefix, std::vector<std::string>& bi
     {
         std::string& currentKeyName = bindings[i];
         int currentIndex = findKeyIndexByName(currentKeyName);
+        const std::string indexedLabel = (bindings.size() > 1)
+            ? std::string(rowLabel) + " " + std::to_string(i + 1)
+            : std::string(rowLabel);
 
         ImGui::PushID(static_cast<int>(i));
 
-        const float rowAvail = ImGui::GetContentRegionAvail().x;
+        const auto row = OverlayUI::BeginSettingRow(indexedLabel.c_str());
         const float actionBtnW = ImGui::GetFrameHeight();
-        float comboWidth = rowAvail - (actionBtnW * 2.0f + ImGui::GetStyle().ItemSpacing.x * 2.0f);
-        const float comboMin = rowAvail * 0.56f;
-        if (comboWidth < comboMin)
-            comboWidth = comboMin;
+        float comboWidth = row.controlWidth - (actionBtnW * 2.0f + 7.0f);
         if (comboWidth < 1.0f)
             comboWidth = 1.0f;
         ImGui::SetNextItemWidth(comboWidth);
 
-        if (ImGui::Combo("##binding_combo", &currentIndex, key_names_cstrs.data(), static_cast<int>(key_names_cstrs.size())))
+        if (ImGui::Combo("##value", &currentIndex, key_names_cstrs.data(), static_cast<int>(key_names_cstrs.size())))
         {
             currentKeyName = key_names[currentIndex];
             changed = true;
@@ -85,6 +85,7 @@ bool drawButtonBindingRows(const char* comboPrefix, std::vector<std::string>& bi
             changed = true;
         }
 
+        OverlayUI::EndSettingRow(row);
         ImGui::PopID();
 
         if (removedCurrent)
@@ -96,34 +97,29 @@ bool drawButtonBindingRows(const char* comboPrefix, std::vector<std::string>& bi
     return changed;
 }
 
-void drawBindingSection(const char* title, const char* sectionId, const char* comboPrefix, std::vector<std::string>& bindings, bool keepAtLeastOne = true)
+void drawBindingRowsAndMarkDirty(const char* rowLabel, std::vector<std::string>& bindings, bool keepAtLeastOne = true)
 {
-    if (!OverlayUI::BeginSection(title, sectionId))
-        return;
-
-    if (drawButtonBindingRows(comboPrefix, bindings, keepAtLeastOne))
+    if (drawButtonBindingRows(rowLabel, bindings, keepAtLeastOne))
         OverlayConfig_MarkDirty();
-
-    OverlayUI::EndSection();
 }
 }
 
 void draw_buttons()
 {
-    drawBindingSection("Targeting Buttons", "buttons_section_targeting", "Targeting Button", config.button_targeting);
-    drawBindingSection("Shoot Buttons", "buttons_section_shoot", "Shoot Button", config.button_shoot);
-    drawBindingSection("Zoom Buttons", "buttons_section_zoom", "Zoom Button", config.button_zoom);
-    drawBindingSection("Exit Buttons", "buttons_section_exit", "Exit Button", config.button_exit);
-    drawBindingSection("Pause Buttons", "buttons_section_pause", "Pause Button", config.button_pause);
-    drawBindingSection("Reload Config Buttons", "buttons_section_reload", "Reload config Button", config.button_reload_config);
-    drawBindingSection("Overlay Buttons", "buttons_section_overlay", "Overlay Button", config.button_open_overlay);
-
-    if (OverlayUI::BeginSection("Arrow Key Options", "buttons_section_arrows"))
+    if (OverlayUI::BeginSection("Hotkeys", "buttons_section_hotkeys"))
     {
-        if (ImGui::Checkbox("Enable arrows keys options", &config.enable_arrows_settings))
-        {
+        drawBindingRowsAndMarkDirty("Targeting", config.button_targeting);
+        drawBindingRowsAndMarkDirty("Shoot", config.button_shoot);
+        drawBindingRowsAndMarkDirty("Zoom", config.button_zoom);
+        drawBindingRowsAndMarkDirty("Exit", config.button_exit);
+        drawBindingRowsAndMarkDirty("Pause", config.button_pause);
+        drawBindingRowsAndMarkDirty("Reload Config", config.button_reload_config);
+        drawBindingRowsAndMarkDirty("Open Overlay", config.button_open_overlay);
+
+        const auto row = OverlayUI::BeginSettingRow("Arrow Key Options");
+        if (ImGui::Checkbox("##value", &config.enable_arrows_settings))
             OverlayConfig_MarkDirty();
-        }
+        OverlayUI::EndSettingRow(row);
         OverlayUI::EndSection();
     }
 }
