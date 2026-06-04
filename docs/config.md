@@ -315,30 +315,6 @@ Use `None` to disable a button where supported.
 | `game_overlay_icon_anchor` | `center` | Icon anchor: `center`, `top`, `bottom`, or `head`. |
 | `game_overlay_icon_class` | `-1` | Class to draw icon for. `-1` means all. |
 
-## Aim Simulation Overlay
-
-| Key | Default | Meaning |
-|---|---:|---|
-| `aim_sim_enabled` | `false` | Enables aim simulation overlay. |
-| `aim_sim_x` | `24` | Window X position. |
-| `aim_sim_y` | `24` | Window Y position. |
-| `aim_sim_width` | `560` | Width. Clamped `220..1920`. |
-| `aim_sim_height` | `360` | Height. Clamped `180..1080`. |
-| `aim_sim_fps_min` | `90` | Minimum simulated FPS. Clamped `15..360`. |
-| `aim_sim_fps_max` | `120` | Maximum simulated FPS. Clamped `15..360`. |
-| `aim_sim_fps_jitter` | `0.15` | FPS jitter. Clamped `0.0..0.8`. |
-| `aim_sim_capture_delay_ms` | `6.0` | Simulated capture delay. Clamped `0..80`. |
-| `aim_sim_inference_delay_ms` | `12.0` | Simulated inference delay. Clamped `0..120`. |
-| `aim_sim_use_live_inference` | `true` | Uses live inference where available. |
-| `aim_sim_input_delay_ms` | `2.0` | Simulated input delay. Clamped `0..60`. |
-| `aim_sim_extra_delay_ms` | `2.0` | Extra simulated delay. Clamped `0..60`. |
-| `aim_sim_target_max_speed` | `560.0` | Simulated target max speed. Clamped `20..2500`. |
-| `aim_sim_target_accel` | `1850.0` | Simulated target acceleration. Clamped `20..10000`. |
-| `aim_sim_target_stop_chance` | `0.25` | Stop probability. Clamped `0.0..0.95`. |
-| `aim_sim_show_observed` | `true` | Draw observed target. |
-| `aim_sim_show_history` | `true` | Draw history. |
-| `aim_sim_show_kalman_debug` | `true` | Draw Kalman debug information. |
-
 ## Data Collection
 
 | Key | Default | Meaning |

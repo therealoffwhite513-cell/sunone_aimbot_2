@@ -22,6 +22,5 @@ void draw_game_overlay_settings();
 void draw_game_overlay_general();
 void draw_game_overlay_visuals();
 void draw_game_overlay_icon();
-void draw_aim_simulation_settings();
 
 #endif // DRAW_SETTINGS_H

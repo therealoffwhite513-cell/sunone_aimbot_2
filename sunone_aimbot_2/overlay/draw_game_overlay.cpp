@@ -6,12 +6,10 @@
 #include <commdlg.h>
 #include <string>
 #include <cstring>
-#include <algorithm>
 
 #include "imgui/imgui.h"
 #include "config.h"
 #include "sunone_aimbot_2.h"
-#include "capture.h"
 #include "overlay/config_dirty.h"
 #include "overlay/ui_sections.h"
 
@@ -24,8 +22,7 @@ enum class GameOverlaySettingsPage
     All,
     General,
     Visuals,
-    Icon,
-    Simulation
+    Icon
 };
 
 bool shouldDrawGameOverlayPage(GameOverlaySettingsPage current, GameOverlaySettingsPage wanted)
@@ -252,182 +249,6 @@ static void draw_game_overlay_page(GameOverlaySettingsPage page)
         OverlayUI::EndSection();
     }
 
-    if (shouldDrawGameOverlayPage(page, GameOverlaySettingsPage::Simulation) &&
-        OverlayUI::BeginSection("Aim Simulation", "game_overlay_section_aim_sim"))
-    {
-        if (ImGui::Checkbox("Enable Aim Simulation Window", &config.aim_sim_enabled))
-            OverlayConfig_MarkDirty();
-
-        if (!config.aim_sim_enabled)
-        {
-            ImGui::BeginDisabled();
-        }
-
-        ImGui::SliderInt("Sim X", &config.aim_sim_x, -3000, 3000);
-        if (ImGui::IsItemDeactivatedAfterEdit())
-            OverlayConfig_MarkDirty();
-
-        ImGui::SliderInt("Sim Y", &config.aim_sim_y, -3000, 3000);
-        if (ImGui::IsItemDeactivatedAfterEdit())
-            OverlayConfig_MarkDirty();
-
-        ImGui::SliderInt("Sim Width", &config.aim_sim_width, 220, 1600);
-        if (ImGui::IsItemDeactivatedAfterEdit())
-            OverlayConfig_MarkDirty();
-
-        ImGui::SliderInt("Sim Height", &config.aim_sim_height, 180, 1000);
-        if (ImGui::IsItemDeactivatedAfterEdit())
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::SliderInt("Sim FPS Min", &config.aim_sim_fps_min, 15, 360))
-        {
-            if (config.aim_sim_fps_min > config.aim_sim_fps_max)
-                config.aim_sim_fps_max = config.aim_sim_fps_min;
-            OverlayConfig_MarkDirty();
-        }
-
-        if (ImGui::SliderInt("Sim FPS Max", &config.aim_sim_fps_max, 15, 360))
-        {
-            if (config.aim_sim_fps_max < config.aim_sim_fps_min)
-                config.aim_sim_fps_min = config.aim_sim_fps_max;
-            OverlayConfig_MarkDirty();
-        }
-
-        if (ImGui::SliderFloat("FPS Jitter", &config.aim_sim_fps_jitter, 0.0f, 0.8f, "%.3f"))
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::SliderFloat("Capture Delay (ms)", &config.aim_sim_capture_delay_ms, 0.0f, 80.0f, "%.1f"))
-            OverlayConfig_MarkDirty();
-
-        static bool delayedSnapshotPending = false;
-        static double delayedSnapshotApplyAt = 0.0;
-        const auto apply_snapshot_metrics = []()
-        {
-            float current_preprocess = 0.0f;
-            float current_inference = 0.0f;
-            float current_copy = 0.0f;
-            float current_post = 0.0f;
-            float current_nms = 0.0f;
-            bool hasTimingMetrics = false;
-
-            if (config.backend == "DML" && dml_detector)
-            {
-                current_preprocess = static_cast<float>(dml_detector->lastPreprocessTimeDML.count());
-                current_inference = static_cast<float>(dml_detector->lastInferenceTimeDML.count());
-                current_copy = static_cast<float>(dml_detector->lastCopyTimeDML.count());
-                current_post = static_cast<float>(dml_detector->lastPostprocessTimeDML.count());
-                current_nms = static_cast<float>(dml_detector->lastNmsTimeDML.count());
-                hasTimingMetrics = true;
-            }
-#ifdef USE_CUDA
-            else
-            {
-                current_preprocess = static_cast<float>(trt_detector.lastPreprocessTime.count());
-                current_inference = static_cast<float>(trt_detector.lastInferenceTime.count());
-                current_copy = static_cast<float>(trt_detector.lastCopyTime.count());
-                current_post = static_cast<float>(trt_detector.lastPostprocessTime.count());
-                current_nms = static_cast<float>(trt_detector.lastNmsTime.count());
-                hasTimingMetrics = true;
-            }
-#endif
-
-            const auto clampf = [](float v, float lo, float hi) -> float
-            {
-                if (v < lo) return lo;
-                if (v > hi) return hi;
-                return v;
-            };
-
-            const float fpsNow = static_cast<float>(captureFps.load());
-            if (fpsNow > 1.0f)
-            {
-                const float captureDelayMs = 1000.0f / fpsNow;
-                config.aim_sim_capture_delay_ms = clampf(captureDelayMs, 0.0f, 80.0f);
-            }
-
-            if (hasTimingMetrics && current_inference > 0.0f)
-                config.aim_sim_inference_delay_ms = clampf(current_inference, 0.0f, 120.0f);
-
-            if (hasTimingMetrics)
-            {
-                const float extraDelayMs = current_preprocess + current_copy + current_post + current_nms;
-                config.aim_sim_extra_delay_ms = clampf(extraDelayMs, 0.0f, 60.0f);
-            }
-
-            OverlayConfig_MarkDirty();
-        };
-
-        if (delayedSnapshotPending && ImGui::GetTime() >= delayedSnapshotApplyAt)
-        {
-            apply_snapshot_metrics();
-            delayedSnapshotPending = false;
-        }
-
-        if (ImGui::Checkbox("Use Live Inference Delay", &config.aim_sim_use_live_inference))
-            OverlayConfig_MarkDirty();
-        ImGui::SameLine();
-        if (ImGui::Button("Snapshot Metrics"))
-            apply_snapshot_metrics();
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip(
-                "Capture Delay <- 1000/FPS\n"
-                "Inference Delay <- current backend inference\n"
-                "Extra Delay <- preprocess + copy + postprocess + NMS"
-            );
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Snapshot in 4s"))
-        {
-            delayedSnapshotPending = true;
-            delayedSnapshotApplyAt = ImGui::GetTime() + 4.0;
-        }
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Start 4-second timer, then snapshot metrics automatically.");
-
-        if (delayedSnapshotPending)
-        {
-            const double remaining = std::max(0.0, delayedSnapshotApplyAt - ImGui::GetTime());
-            ImGui::SameLine();
-            ImGui::TextDisabled("Auto in %.1fs", static_cast<float>(remaining));
-        }
-
-        if (ImGui::SliderFloat("Inference Delay (ms)", &config.aim_sim_inference_delay_ms, 0.0f, 120.0f, "%.1f"))
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::SliderFloat("Input Delay (ms)", &config.aim_sim_input_delay_ms, 0.0f, 60.0f, "%.1f"))
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::SliderFloat("Extra Delay (ms)", &config.aim_sim_extra_delay_ms, 0.0f, 60.0f, "%.1f"))
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::SliderFloat("Target Max Speed", &config.aim_sim_target_max_speed, 20.0f, 2500.0f, "%.0f"))
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::SliderFloat("Target Accel", &config.aim_sim_target_accel, 20.0f, 10000.0f, "%.0f"))
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::SliderFloat("Target Stop Chance", &config.aim_sim_target_stop_chance, 0.0f, 0.95f, "%.2f"))
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::Checkbox("Show Delayed Observation", &config.aim_sim_show_observed))
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::Checkbox("Show Trajectory History", &config.aim_sim_show_history))
-            OverlayConfig_MarkDirty();
-
-        if (ImGui::Checkbox("Show Kalman Debug", &config.aim_sim_show_kalman_debug))
-            OverlayConfig_MarkDirty();
-
-        if (!config.aim_sim_enabled)
-        {
-            ImGui::EndDisabled();
-            ImGui::TextDisabled("Enable Aim Simulation Window to edit settings.");
-        }
-
-        OverlayUI::EndSection();
-    }
-
     if (shouldDrawGameOverlayPage(page, GameOverlaySettingsPage::Icon) && !g_iconLastError.empty())
     {
         if (OverlayUI::BeginSection("Errors", "game_overlay_section_errors"))
@@ -459,9 +280,4 @@ void draw_game_overlay_visuals()
 void draw_game_overlay_icon()
 {
     draw_game_overlay_page(GameOverlaySettingsPage::Icon);
-}
-
-void draw_aim_simulation_settings()
-{
-    draw_game_overlay_page(GameOverlaySettingsPage::Simulation);
 }

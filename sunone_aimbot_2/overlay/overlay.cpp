@@ -354,7 +354,6 @@ enum class SidebarIconKind
     Monitor,
     Palette,
     Image,
-    AimSim,
     Bars,
     Debug
 };
@@ -386,7 +385,6 @@ static const OverlayTabItem kOverlayTabs[] = {
     { "Game Render",   "Visuals", "In-game overlay lifetime, FPS and render toggles.",   draw_game_overlay_general,    SidebarIconKind::Monitor },
     { "Render Style",  "Visuals", "Boxes, capture frame and future point styling.",      draw_game_overlay_visuals,    SidebarIconKind::Palette },
     { "Icon Overlay",  "Visuals", "Per-target icon image, size, anchor and class filter.",draw_game_overlay_icon,      SidebarIconKind::Image },
-    { "Aim Sim",       "Visuals", "Aim simulation window and latency model controls.",   draw_aim_simulation_settings, SidebarIconKind::AimSim },
 
     { "Stats",         "Monitor", "Performance, capture source and timing graphs.",      draw_stats,                   SidebarIconKind::Bars },
     { "Debug",         "Monitor", "Screenshots, data collection and diagnostics.",        draw_debug,                   SidebarIconKind::Debug },
@@ -517,12 +515,6 @@ static void DrawSidebarIcon(ImDrawList* draw, SidebarIconKind icon, const char* 
         draw->AddPolyline(points, 4, color, 0, stroke);
         break;
     }
-    case SidebarIconKind::AimSim:
-        draw->AddCircle(ImVec2(x + 5.0f, y + 13.0f), 2.2f, color, 14, stroke);
-        draw->AddCircle(ImVec2(x + 13.0f, y + 5.0f), 2.2f, color, 14, stroke);
-        draw->AddLine(ImVec2(x + 6.8f, y + 11.2f), ImVec2(x + 11.2f, y + 6.8f), color, stroke);
-        draw->AddTriangleFilled(ImVec2(x + 14.0f, y + 4.0f), ImVec2(x + 11.0f, y + 4.5f), ImVec2(x + 13.5f, y + 7.0f), color);
-        break;
     case SidebarIconKind::Bars:
         draw->AddRectFilled(ImVec2(x + 4.0f, y + 10.0f), ImVec2(x + 6.5f, y + 15.0f), color, 1.0f);
         draw->AddRectFilled(ImVec2(x + 8.0f, y + 6.5f), ImVec2(x + 10.5f, y + 15.0f), color, 1.0f);

@@ -22,13 +22,14 @@ MakcuConnection::MakcuConnection(const std::string& port, unsigned int baud_rate
 
         if (device_.connect(port))
         {
-            if (baud_rate > 0)
+            device_.enableHighPerformanceMode(true);
+
+            constexpr unsigned int sdkHighSpeedBaud = 4000000;
+            if (baud_rate > 0 && baud_rate != sdkHighSpeedBaud)
             {
-                if (!device_.setBaudRate(baud_rate, true))
-                {
-                    std::cerr << "[Makcu] Failed to set baud rate to " << baud_rate
-                        << ", continuing with current baud rate." << std::endl;
-                }
+                std::cout << "[Makcu] Ignoring configured baud rate " << baud_rate
+                    << "; the MAKCU SDK connection is already running at "
+                    << sdkHighSpeedBaud << " baud." << std::endl;
             }
 
             is_open_ = true;

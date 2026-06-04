@@ -198,27 +198,6 @@ public:
     std::string game_overlay_icon_anchor; // "center", "top", "bottom", "head"
     int game_overlay_icon_class; // -1 = all
 
-    // Aim Simulation Overlay
-    bool aim_sim_enabled;
-    int aim_sim_x;
-    int aim_sim_y;
-    int aim_sim_width;
-    int aim_sim_height;
-    int aim_sim_fps_min;
-    int aim_sim_fps_max;
-    float aim_sim_fps_jitter;
-    float aim_sim_capture_delay_ms;
-    float aim_sim_inference_delay_ms;
-    bool aim_sim_use_live_inference;
-    float aim_sim_input_delay_ms;
-    float aim_sim_extra_delay_ms;
-    float aim_sim_target_max_speed;
-    float aim_sim_target_accel;
-    float aim_sim_target_stop_chance;
-    bool aim_sim_show_observed;
-    bool aim_sim_show_history;
-    bool aim_sim_show_kalman_debug;
-
     // Data collection
     bool collect_data_while_playing;
     bool collect_only_when_aimbot_running;
