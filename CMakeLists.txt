@@ -18,23 +18,33 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(AIMBOT_USE_CUDA "Enable CUDA + TensorRT backend (USE_CUDA)" OFF)
+option(AIMBOT_USE_CUDA "Enable CUDA backend (USE_CUDA)" OFF)
 option(AIMBOT_COPY_RUNTIME_DLLS "Copy required runtime DLLs next to ai.exe after build" ON)
 
-set(AIMBOT_PACKAGES_DIR "${CMAKE_SOURCE_DIR}/packages" CACHE PATH "Directory with restored NuGet packages")
-set(AIMBOT_OPENCV_DML_ROOT
-    "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/build/dml"
-    CACHE PATH "Path to DML OpenCV build root")
-set(AIMBOT_OPENCV_CUDA_ROOT
-    "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/build/cuda/install"
-    CACHE PATH "Path to CUDA OpenCV install root")
+if(AIMBOT_USE_CUDA)
+    unset(AIMBOT_PACKAGES_DIR CACHE)
+    unset(AIMBOT_OPENCV_DML_ROOT CACHE)
+    unset(AIMBOT_ONNXRUNTIME_DIR CACHE)
+    unset(AIMBOT_DIRECTML_DIR CACHE)
+    set(AIMBOT_OPENCV_CUDA_ROOT
+        "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/build/cuda/install"
+        CACHE PATH "Path to CUDA OpenCV install root")
+    set(AIMBOT_TENSORRT_ROOT "" CACHE PATH "Path to TensorRT root directory")
+    set(AIMBOT_CUDNN_ROOT "$ENV{ProgramW6432}/NVIDIA/CUDNN/v9.17" CACHE PATH "Path to cuDNN root directory (optional)")
+else()
+    unset(AIMBOT_OPENCV_CUDA_ROOT CACHE)
+    unset(AIMBOT_TENSORRT_ROOT CACHE)
+    unset(AIMBOT_CUDNN_ROOT CACHE)
+    set(AIMBOT_PACKAGES_DIR "${CMAKE_SOURCE_DIR}/packages" CACHE PATH "Directory with restored NuGet packages")
+    set(AIMBOT_OPENCV_DML_ROOT
+        "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/opencv/build/dml"
+        CACHE PATH "Path to DML OpenCV build root")
+endif()
 set(AIMBOT_OPENCV_INCLUDE_DIR "" CACHE PATH "Path to OpenCV include directory")
 set(AIMBOT_OPENCV_LIBRARY "" CACHE FILEPATH "Path to opencv_world*.lib")
 set(AIMBOT_OPENCV_DLL "" CACHE FILEPATH "Path to opencv_world*.dll")
-set(AIMBOT_TENSORRT_ROOT "" CACHE PATH "Path to TensorRT root directory")
 set(AIMBOT_GHUB_MOUSE_DLL "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/ghub_mouse.dll" CACHE FILEPATH "Path to ghub_mouse.dll")
 set(AIMBOT_RZCTL_DLL "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/rzctl.dll" CACHE FILEPATH "Path to rzctl.dll")
-set(AIMBOT_CUDNN_ROOT "$ENV{ProgramW6432}/NVIDIA/CUDNN/v9.17" CACHE PATH "Path to cuDNN root directory (optional)")
 set(AIMBOT_CPPWINRT_INCLUDE_DIR "" CACHE PATH "Path to Windows SDK cppwinrt include directory")
 
 function(aimbot_pick_latest_dir out_var glob_pattern)
@@ -127,16 +137,43 @@ function(aimbot_copy_if_exists target path)
     endif()
 endfunction()
 
-aimbot_pick_latest_dir(_onnxruntime_default "${AIMBOT_PACKAGES_DIR}/Microsoft.ML.OnnxRuntime.DirectML.*")
-aimbot_pick_latest_dir(_directml_default "${AIMBOT_PACKAGES_DIR}/Microsoft.AI.DirectML.*")
-aimbot_pick_latest_dir(_tensorrt_default "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/TensorRT-*")
+function(aimbot_remove_runtime_files target)
+    set(_script "${CMAKE_CURRENT_BINARY_DIR}/${target}_remove_stale_runtime.cmake")
+    file(WRITE "${_script}" "if(NOT DEFINED TARGET_DIR)\n  message(FATAL_ERROR \"TARGET_DIR is not set\")\nendif()\nset(_patterns\n")
+    foreach(_pattern IN LISTS ARGN)
+        file(APPEND "${_script}" "  \"${_pattern}\"\n")
+    endforeach()
+    file(APPEND "${_script}" [=[
+)
+foreach(_pattern IN LISTS _patterns)
+  file(GLOB _matches "${TARGET_DIR}/${_pattern}")
+  if(_matches)
+    file(REMOVE ${_matches})
+  endif()
+endforeach()
+]=])
+    add_custom_command(
+        TARGET ${target}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} "-DTARGET_DIR=$<TARGET_FILE_DIR:${target}>" -P "${_script}"
+        VERBATIM
+    )
+endfunction()
 
-set(AIMBOT_ONNXRUNTIME_DIR "${_onnxruntime_default}" CACHE PATH "Path to Microsoft.ML.OnnxRuntime.DirectML.* package")
-set(AIMBOT_DIRECTML_DIR "${_directml_default}" CACHE PATH "Path to Microsoft.AI.DirectML.* package")
-if(AIMBOT_TENSORRT_ROOT STREQUAL "" OR
-   NOT EXISTS "${AIMBOT_TENSORRT_ROOT}/include/NvInfer.h" OR
-   NOT EXISTS "${AIMBOT_TENSORRT_ROOT}/lib/nvinfer_10.lib")
-    set(AIMBOT_TENSORRT_ROOT "${_tensorrt_default}" CACHE PATH "Path to TensorRT root directory" FORCE)
+if(AIMBOT_USE_CUDA)
+    aimbot_pick_latest_dir(_tensorrt_default "${CMAKE_SOURCE_DIR}/sunone_aimbot_2/modules/TensorRT-*")
+    if(AIMBOT_TENSORRT_ROOT STREQUAL "" OR
+       NOT EXISTS "${AIMBOT_TENSORRT_ROOT}/include/NvInfer.h" OR
+       NOT EXISTS "${AIMBOT_TENSORRT_ROOT}/lib/nvinfer_10.lib")
+        set(AIMBOT_TENSORRT_ROOT "${_tensorrt_default}" CACHE PATH "Path to TensorRT root directory" FORCE)
+    endif()
+endif()
+
+if(NOT AIMBOT_USE_CUDA)
+    aimbot_pick_latest_dir(_onnxruntime_default "${AIMBOT_PACKAGES_DIR}/Microsoft.ML.OnnxRuntime.DirectML.*")
+    aimbot_pick_latest_dir(_directml_default "${AIMBOT_PACKAGES_DIR}/Microsoft.AI.DirectML.*")
+    set(AIMBOT_ONNXRUNTIME_DIR "${_onnxruntime_default}" CACHE PATH "Path to Microsoft.ML.OnnxRuntime.DirectML.* package")
+    set(AIMBOT_DIRECTML_DIR "${_directml_default}" CACHE PATH "Path to Microsoft.AI.DirectML.* package")
 endif()
 
 if(AIMBOT_USE_CUDA)
@@ -187,11 +224,13 @@ if(AIMBOT_CPPWINRT_INCLUDE_DIR STREQUAL "")
     endif()
 endif()
 
-if(AIMBOT_ONNXRUNTIME_DIR STREQUAL "")
-    message(FATAL_ERROR "Microsoft.ML.OnnxRuntime.DirectML package directory was not found. Set AIMBOT_ONNXRUNTIME_DIR manually.")
-endif()
-if(AIMBOT_DIRECTML_DIR STREQUAL "")
-    message(WARNING "Microsoft.AI.DirectML package directory was not found. DirectML.dll auto-copy may be skipped.")
+if(NOT AIMBOT_USE_CUDA)
+    if(AIMBOT_ONNXRUNTIME_DIR STREQUAL "")
+        message(FATAL_ERROR "Microsoft.ML.OnnxRuntime.DirectML package directory was not found. Set AIMBOT_ONNXRUNTIME_DIR manually.")
+    endif()
+    if(AIMBOT_DIRECTML_DIR STREQUAL "")
+        message(FATAL_ERROR "Microsoft.AI.DirectML package directory was not found. Set AIMBOT_DIRECTML_DIR manually.")
+    endif()
 endif()
 
 set(SRC_DIR "${CMAKE_SOURCE_DIR}/sunone_aimbot_2")
@@ -204,11 +243,7 @@ set(AIMBOT_SOURCES
     "${SRC_DIR}/capture/virtual_camera.cpp"
     "${SRC_DIR}/capture/winrt_capture.cpp"
     "${SRC_DIR}/config/config.cpp"
-    "${SRC_DIR}/depth/depth_anything_trt.cpp"
-    "${SRC_DIR}/depth/depth_mask.cpp"
-    "${SRC_DIR}/depth/depth_utils.cpp"
     "${SRC_DIR}/detector/detection_buffer.cpp"
-    "${SRC_DIR}/detector/dml_detector.cpp"
     "${SRC_DIR}/detector/postProcess.cpp"
     "${SRC_DIR}/imgui/imgui.cpp"
     "${SRC_DIR}/imgui/imgui_draw.cpp"
@@ -265,10 +300,17 @@ if(AIMBOT_USE_CUDA)
     endif()
     enable_language(CUDA)
     list(APPEND AIMBOT_SOURCES
+        "${SRC_DIR}/depth/depth_anything_trt.cpp"
+        "${SRC_DIR}/depth/depth_mask.cpp"
+        "${SRC_DIR}/depth/depth_utils.cpp"
         "${SRC_DIR}/detector/cuda_preprocess.cu"
         "${SRC_DIR}/detector/trt_detector.cpp"
         "${SRC_DIR}/mem/gpu_resource_manager.cpp"
         "${SRC_DIR}/tensorrt/nvinf.cpp"
+    )
+else()
+    list(APPEND AIMBOT_SOURCES
+        "${SRC_DIR}/detector/dml_detector.cpp"
     )
 endif()
 
@@ -311,7 +353,6 @@ target_include_directories(ai PRIVATE
     "${SRC_DIR}/benchmarks"
     "${SRC_DIR}/capture"
     "${SRC_DIR}/config"
-    "${SRC_DIR}/depth"
     "${SRC_DIR}/detector"
     "${SRC_DIR}/imgui"
     "${SRC_DIR}/keyboard"
@@ -320,7 +361,6 @@ target_include_directories(ai PRIVATE
     "${SRC_DIR}/mouse"
     "${SRC_DIR}/overlay"
     "${SRC_DIR}/scr"
-    "${SRC_DIR}/tensorrt"
     "${SRC_DIR}/modules/makcu/include"
     "${SRC_DIR}/modules/serial/include"
     "${SRC_DIR}/modules/stb"
@@ -347,6 +387,10 @@ endif()
 
 if(AIMBOT_USE_CUDA)
     target_compile_definitions(ai PRIVATE USE_CUDA)
+    target_include_directories(ai PRIVATE
+        "${SRC_DIR}/depth"
+        "${SRC_DIR}/tensorrt"
+    )
 endif()
 
 if(NOT AIMBOT_USE_CUDA)
@@ -366,9 +410,6 @@ endif()
 aimbot_require_file("${AIMBOT_OPENCV_INCLUDE_DIR}/opencv2/opencv.hpp" "OpenCV headers")
 aimbot_require_file("${AIMBOT_OPENCV_LIBRARY}" "OpenCV library")
 aimbot_require_file("${AIMBOT_OPENCV_DLL}" "OpenCV runtime DLL")
-aimbot_require_file("${AIMBOT_ONNXRUNTIME_DIR}/build/native/include/onnxruntime_cxx_api.h" "ONNX Runtime headers")
-aimbot_require_file("${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime.lib" "ONNX Runtime import library")
-
 if(AIMBOT_CPPWINRT_INCLUDE_DIR STREQUAL "")
     message(FATAL_ERROR "C++/WinRT include directory is not set. Set AIMBOT_CPPWINRT_INCLUDE_DIR manually.")
 endif()
@@ -376,14 +417,19 @@ aimbot_require_file("${AIMBOT_CPPWINRT_INCLUDE_DIR}/winrt/base.h" "C++/WinRT hea
 
 target_include_directories(ai PRIVATE
     "${AIMBOT_OPENCV_INCLUDE_DIR}"
-    "${AIMBOT_ONNXRUNTIME_DIR}/build/native/include"
     "${AIMBOT_CPPWINRT_INCLUDE_DIR}"
 )
+
+if(NOT AIMBOT_USE_CUDA)
+    aimbot_require_file("${AIMBOT_ONNXRUNTIME_DIR}/build/native/include/onnxruntime_cxx_api.h" "ONNX Runtime headers")
+    aimbot_require_file("${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime.lib" "ONNX Runtime import library")
+    aimbot_require_file("${AIMBOT_DIRECTML_DIR}/bin/x64-win/DirectML.dll" "DirectML runtime DLL")
+    target_include_directories(ai PRIVATE "${AIMBOT_ONNXRUNTIME_DIR}/build/native/include")
+endif()
 
 target_link_libraries(ai PRIVATE
     serial_embedded
     "${AIMBOT_OPENCV_LIBRARY}"
-    "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime.lib"
     d3d11
     dxgi
     dwmapi
@@ -392,7 +438,13 @@ target_link_libraries(ai PRIVATE
     WindowsApp
 )
 
-if(NOT AIMBOT_DIRECTML_DIR STREQUAL "" AND
+if(NOT AIMBOT_USE_CUDA)
+    target_link_libraries(ai PRIVATE
+        "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime.lib"
+    )
+endif()
+
+if(NOT AIMBOT_USE_CUDA AND
    EXISTS "${AIMBOT_DIRECTML_DIR}/include/DirectML.h" AND
    EXISTS "${AIMBOT_DIRECTML_DIR}/bin/x64-win/DirectML.lib")
     target_include_directories(ai PRIVATE "${AIMBOT_DIRECTML_DIR}/include")
@@ -428,11 +480,11 @@ if(AIMBOT_COPY_RUNTIME_DLLS)
     aimbot_copy_if_exists(ai "${AIMBOT_OPENCV_DLL}")
     aimbot_copy_if_exists(ai "${AIMBOT_GHUB_MOUSE_DLL}")
     aimbot_copy_if_exists(ai "${AIMBOT_RZCTL_DLL}")
-    aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime.dll")
-    aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime_providers_shared.dll")
-    aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime_providers_dml.dll")
 
-    if(NOT AIMBOT_DIRECTML_DIR STREQUAL "")
+    if(NOT AIMBOT_USE_CUDA)
+        aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime.dll")
+        aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime_providers_shared.dll")
+        aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime_providers_dml.dll")
         aimbot_copy_if_exists(ai "${AIMBOT_DIRECTML_DIR}/bin/x64-win/DirectML.dll")
     endif()
 
@@ -461,14 +513,34 @@ if(AIMBOT_COPY_RUNTIME_DLLS)
             aimbot_copy_if_exists(ai "${_aimbot_cudnn_runtime_dll}")
         endif()
 
-        aimbot_copy_if_exists(ai "${AIMBOT_ONNXRUNTIME_DIR}/runtimes/win-x64/native/onnxruntime_providers_cuda.dll")
         aimbot_copy_if_exists(ai "${AIMBOT_TENSORRT_ROOT}/bin/nvinfer_10.dll")
         aimbot_copy_if_exists(ai "${AIMBOT_TENSORRT_ROOT}/bin/nvonnxparser_10.dll")
     endif()
 endif()
 
-message(STATUS "Aimbot backend: ${AIMBOT_USE_CUDA}")
+if(AIMBOT_USE_CUDA)
+    aimbot_remove_runtime_files(ai
+        "DirectML.dll"
+        "onnxruntime.dll"
+        "onnxruntime_providers_*.dll")
+else()
+    aimbot_remove_runtime_files(ai
+        "cudart*.dll"
+        "cudnn*.dll"
+        "nvinfer*.dll"
+        "nvonnxparser*.dll"
+        "onnxruntime_providers_cuda.dll")
+endif()
+
+if(AIMBOT_USE_CUDA)
+    message(STATUS "Aimbot backend: CUDA/TensorRT")
+else()
+    message(STATUS "Aimbot backend: DirectML")
+endif()
 message(STATUS "OpenCV include: ${AIMBOT_OPENCV_INCLUDE_DIR}")
 message(STATUS "OpenCV lib: ${AIMBOT_OPENCV_LIBRARY}")
-message(STATUS "ONNX Runtime package: ${AIMBOT_ONNXRUNTIME_DIR}")
+if(NOT AIMBOT_USE_CUDA)
+    message(STATUS "ONNX Runtime package: ${AIMBOT_ONNXRUNTIME_DIR}")
+    message(STATUS "DirectML package: ${AIMBOT_DIRECTML_DIR}")
+endif()
 message(STATUS "C++/WinRT include: ${AIMBOT_CPPWINRT_INCLUDE_DIR}")

@@ -194,7 +194,6 @@ struct CudaCaptureDiagnostics
     uint64_t cpuFallbackFrames = 0;
     uint64_t cpuFallbackEmpty = 0;
     uint64_t cpuPathFrames = 0;
-    uint64_t dmlSubmitted = 0;
     uint64_t trtCpuSubmitted = 0;
     bool lastPreferGpu = false;
     bool lastNeedCpuCopy = false;
@@ -269,7 +268,6 @@ void MaybeLogCudaCaptureDiagnostics(CudaCaptureDiagnostics& diag, const CaptureT
         << " cpu_fallback_empty=" << diag.cpuFallbackEmpty
         << " cpu_path_frames=" << diag.cpuPathFrames
         << " trt_cpu_submitted=" << diag.trtCpuSubmitted
-        << " dml_submitted=" << diag.dmlSubmitted
         << std::endl;
 }
 #endif
@@ -394,9 +392,6 @@ private:
 
     void Run()
     {
-        std::error_code ec;
-        std::filesystem::create_directories("screenshots", ec);
-
         while (true)
         {
             std::pair<std::string, cv::Mat> job;
@@ -412,7 +407,16 @@ private:
 
             try
             {
-                const std::filesystem::path outputPath = std::filesystem::path("screenshots") / job.first;
+                const std::filesystem::path screenshotsDir("screenshots");
+                std::error_code ec;
+                std::filesystem::create_directories(screenshotsDir, ec);
+                if (ec)
+                {
+                    std::cerr << "[Capture] Screenshot folder create failed: " << ec.message() << std::endl;
+                    continue;
+                }
+
+                const std::filesystem::path outputPath = screenshotsDir / job.first;
                 cv::imwrite(outputPath.string(), job.second);
             }
             catch (const std::exception& e)
@@ -1114,18 +1118,16 @@ void captureThread(int CAPTURE_WIDTH, int CAPTURE_HEIGHT)
                 }
 #endif
 
-                if (currentCfg.backend == "DML" && dml_detector)
-                {
-                    dml_detector->processFrame(detectionFrame, screenshotCpu, frameTimestamp);
 #ifdef USE_CUDA
-                    cudaDiag.dmlSubmitted++;
-#endif
-                }
-#ifdef USE_CUDA
-                else if (currentCfg.backend == "TRT")
+                if (currentCfg.backend == "TRT")
                 {
                     trt_detector.processFrame(detectionFrame, screenshotCpu, frameTimestamp);
                     cudaDiag.trtCpuSubmitted++;
+                }
+#else
+                if (dml_detector)
+                {
+                    dml_detector->processFrame(detectionFrame, screenshotCpu, frameTimestamp);
                 }
 #endif
             }

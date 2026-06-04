@@ -36,7 +36,6 @@ try {
 
     Import-VisualStudioEnvironment
     $ninja = Ensure-Ninja -AllowDownload:$allowDownloads -DryRun:$DryRun
-    Restore-NuGetPackages -UseLatest:$UseLatestPackages -AllowDownload:$allowDownloads -DryRun:$DryRun
     Ensure-CoreSourceModules -AllowDownload:$allowDownloads -DryRun:$DryRun
 
     $resolution = Get-BestCompatibleCudaDependencySet
@@ -136,23 +135,6 @@ try {
         Invoke-External "powershell" $psArgs -DryRun:$DryRun
     }
 
-    $onnxDir = Find-LatestValidPackageDir -PackagePrefix "Microsoft.ML.OnnxRuntime.DirectML" -RequiredRelativeFiles @(
-        "build\native\include\onnxruntime_cxx_api.h",
-        "runtimes\win-x64\native\onnxruntime.lib"
-    )
-    if (-not $onnxDir) {
-        if ($DryRun) {
-            $onnxDir = Resolve-RepoPath "packages\Microsoft.ML.OnnxRuntime.DirectML.latest"
-        }
-        else {
-            throw "ONNX Runtime DirectML NuGet package was not restored correctly."
-        }
-    }
-
-    $directMlDir = Find-LatestValidPackageDir -PackagePrefix "Microsoft.AI.DirectML" -RequiredRelativeFiles @(
-        "bin\x64-win\DirectML.dll"
-    )
-
     $buildPath = Resolve-RepoPath $BuildDir
     $resolutionPath = Write-DependencyResolution -Resolution ([pscustomobject]@{
         backend = "cuda"
@@ -170,8 +152,6 @@ try {
         cudnnRoot = $resolution.CudnnRoot
         useCudnnForOpenCvDnn = $false
         opencvRoot = $opencvCudaInstall
-        onnxRuntimeDir = $onnxDir
-        directMlDir = $directMlDir
     })
     Write-BuildStep "Dependency resolution written to $resolutionPath" "cuda"
 
@@ -182,13 +162,9 @@ try {
         "-DCMAKE_MAKE_PROGRAM=$(ConvertTo-CMakePath $ninja)",
         "-DAIMBOT_USE_CUDA=ON",
         "-DAIMBOT_TENSORRT_ROOT=$(ConvertTo-CMakePath $resolution.TensorRtRoot)",
-        "-DAIMBOT_ONNXRUNTIME_DIR=$(ConvertTo-CMakePath $onnxDir)",
         "-DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler",
         "-DCUDA_NVCC_FLAGS=--allow-unsupported-compiler"
     )
-    if ($directMlDir) {
-        $cmakeArgs += "-DAIMBOT_DIRECTML_DIR=$(ConvertTo-CMakePath $directMlDir)"
-    }
     if ($resolution.CudnnRoot) {
         $cmakeArgs += "-DAIMBOT_CUDNN_ROOT=$(ConvertTo-CMakePath $resolution.CudnnRoot)"
     }

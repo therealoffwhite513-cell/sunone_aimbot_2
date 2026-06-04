@@ -155,8 +155,8 @@ bool Config::loadConfig(const std::string& filename)
         backend = "TRT";
 #else
         backend = "DML";
-#endif
         dml_device_id = 0;
+#endif
 
 #ifdef USE_CUDA
         ai_model = "sunxds_0.5.6.engine";
@@ -476,12 +476,11 @@ bool Config::loadConfig(const std::string& filename)
 
     // AI
 #ifdef USE_CUDA
-    backend = get_string("backend", "TRT");
+    backend = "TRT";
 #else
-    backend = get_string("backend", "DML");
-#endif
-
+    backend = "DML";
     dml_device_id = get_long("dml_device_id", 0);
+#endif
 
 #ifdef USE_CUDA
     ai_model = get_string("ai_model", "sunxds_0.8.0.engine");
@@ -777,9 +776,11 @@ bool Config::saveConfig(const std::string& filename)
 
     // AI
     file << "# AI\n"
-        << "backend = " << backend << "\n"
-        << "dml_device_id = " << dml_device_id << "\n"
-        << "ai_model = " << ai_model << "\n"
+        << "backend = " << backend << "\n";
+#ifndef USE_CUDA
+    file << "dml_device_id = " << dml_device_id << "\n";
+#endif
+    file << "ai_model = " << ai_model << "\n"
         << std::fixed << std::setprecision(2)
         << "confidence_threshold = " << confidence_threshold << "\n"
         << "nms_threshold = " << nms_threshold << "\n"

@@ -26,6 +26,12 @@ static bool ai_state_initialized = false;
 
 void draw_ai()
 {
+#ifdef USE_CUDA
+    config.backend = "TRT";
+#else
+    config.backend = "DML";
+#endif
+
     if (!ai_state_initialized)
     {
         prev_backend = config.backend;
@@ -90,38 +96,6 @@ void draw_ai()
         }
         OverlayUI::EndSection();
     }
-
-#ifdef USE_CUDA
-    if (OverlayUI::BeginSection("Backend", "ai_section_backend"))
-    {
-        std::vector<std::string> backendOptions = { "TRT", "DML" };
-        std::vector<const char*> backendItems = { "TensorRT (CUDA)", "DirectML (CPU/GPU)" };
-
-        int currentBackendIndex = config.backend == "DML" ? 1 : 0;
-
-        {
-            const auto row = OverlayUI::BeginSettingRow("Backend");
-            if (ImGui::Combo("##backend", &currentBackendIndex, backendItems.data(), static_cast<int>(backendItems.size())))
-            {
-                std::string newBackend = backendOptions[currentBackendIndex];
-                if (config.backend != newBackend)
-                {
-                    config.backend = newBackend;
-                    std::vector<std::string> compatibleModels = getAvailableModels();
-                    if (!compatibleModels.empty() &&
-                        std::find(compatibleModels.begin(), compatibleModels.end(), config.ai_model) == compatibleModels.end())
-                    {
-                        config.ai_model = compatibleModels[0];
-                    }
-                    OverlayConfig_MarkDirty();
-                    detector_model_changed.store(true);
-                }
-            }
-            OverlayUI::EndSettingRow(row);
-        }
-        OverlayUI::EndSection();
-    }
-#endif
 
     if (OverlayUI::BeginSection("Detection", "ai_section_detection"))
     {

@@ -28,12 +28,12 @@
 #include "ghub.h"
 #include "other_tools.h"
 #include "virtual_camera.h"
-#include "mem/gpu_resource_manager.h"
 #include "mem/cpu_affinity_manager.h"
 #include "runtime/thread_loops.h"
 #include "benchmarks/provider_benchmark.h"
 
 #ifdef USE_CUDA
+#include "mem/gpu_resource_manager.h"
 #include "depth/depth_anything_trt.h"
 #include "depth/depth_mask.h"
 #include "tensorrt/nvinf.h"
@@ -48,9 +48,10 @@ std::mutex inputDevicesMutex;
 
 #ifdef USE_CUDA
 TrtDetector trt_detector;
+#else
+DirectMLDetector* dml_detector = nullptr;
 #endif
 
-DirectMLDetector* dml_detector = nullptr;
 MouseThread* globalMouseThread = nullptr;
 Config config;
 
@@ -323,13 +324,6 @@ int main(int argc, char** argv)
             return -1;
         }
 #endif
-        if (!CreateDirectory(L"screenshots", NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
-        {
-            std::cout << "[MAIN] Error with screenshot folder" << std::endl;
-            std::cin.get();
-            return -1;
-        }
-
         if (!CreateDirectory(L"models", NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
         {
             std::cout << "[MAIN] Error with models folder" << std::endl;
@@ -386,42 +380,36 @@ int main(int argc, char** argv)
         globalMouseThread = &mouseThread;
         assignInputDevices();
 
-        std::thread dml_detThread;
-
-        if (config.backend == "DML")
-        {
-            DirectMLDetector* newDmlDetector = nullptr;
-            try
-            {
-                newDmlDetector = new DirectMLDetector("models/" + config.ai_model);
-                dml_detector = newDmlDetector;
-                std::cout << "[MAIN] DML detector created"
-                          << (dml_detector->isReady() ? "." : " without an active model.") << std::endl;
-                dml_detThread = StartThreadGuarded("DmlDetector", [] {
-                    dml_detector->dmlInferenceThread();
-                    });
-            }
-            catch (const std::exception& e)
-            {
-                if (dml_detector == newDmlDetector)
-                    dml_detector = nullptr;
-                delete newDmlDetector;
-                std::cerr << "[MAIN] DML detector is unavailable: " << e.what()
-                          << ". The application will continue without DML inference." << std::endl;
-            }
-            catch (...)
-            {
-                if (dml_detector == newDmlDetector)
-                    dml_detector = nullptr;
-                delete newDmlDetector;
-                std::cerr << "[MAIN] DML detector is unavailable: unknown exception. "
-                          << "The application will continue without DML inference." << std::endl;
-            }
-        }
 #ifdef USE_CUDA
-        else
+        trt_detector.initialize("models/" + config.ai_model);
+#else
+        std::thread dml_detThread;
+        DirectMLDetector* newDmlDetector = nullptr;
+        try
         {
-            trt_detector.initialize("models/" + config.ai_model);
+            newDmlDetector = new DirectMLDetector("models/" + config.ai_model);
+            dml_detector = newDmlDetector;
+            std::cout << "[MAIN] DML detector created"
+                      << (dml_detector->isReady() ? "." : " without an active model.") << std::endl;
+            dml_detThread = StartThreadGuarded("DmlDetector", [] {
+                dml_detector->dmlInferenceThread();
+                });
+        }
+        catch (const std::exception& e)
+        {
+            if (dml_detector == newDmlDetector)
+                dml_detector = nullptr;
+            delete newDmlDetector;
+            std::cerr << "[MAIN] DML detector is unavailable: " << e.what()
+                      << ". The application will continue without DML inference." << std::endl;
+        }
+        catch (...)
+        {
+            if (dml_detector == newDmlDetector)
+                dml_detector = nullptr;
+            delete newDmlDetector;
+            std::cerr << "[MAIN] DML detector is unavailable: unknown exception. "
+                      << "The application will continue without DML inference." << std::endl;
         }
 #endif
 
@@ -455,16 +443,16 @@ int main(int argc, char** argv)
 
         keyThread.join();
         capThread.join();
+#ifdef USE_CUDA
+        trt_detector.requestStop();
+        trt_detThread.join();
+#else
         if (dml_detThread.joinable())
         {
             dml_detector->shouldExit = true;
             dml_detector->inferenceCV.notify_all();
             dml_detThread.join();
         }
-
-#ifdef USE_CUDA
-        trt_detector.requestStop();
-        trt_detThread.join();
 #endif
         mouseMovThread.join();
         overlayThread.join();
@@ -481,11 +469,13 @@ int main(int argc, char** argv)
             makcuSerial = nullptr;
         }
 
+#ifndef USE_CUDA
         if (dml_detector)
         {
             delete dml_detector;
             dml_detector = nullptr;
         }
+#endif
 
         gameOverlayShouldExit.store(true);
         if (gameOverlayThread.joinable()) gameOverlayThread.join();

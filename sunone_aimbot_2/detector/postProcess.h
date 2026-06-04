@@ -31,6 +31,7 @@ std::vector<Detection> postProcessYolo(
 );
 #endif
 
+#ifndef USE_CUDA
 std::vector<Detection> postProcessYoloDML(
     const float* output,
     const std::vector<int64_t>& shape,
@@ -40,4 +41,5 @@ std::vector<Detection> postProcessYoloDML(
     int maxDetections = 100,
     std::chrono::duration<double, std::milli>* nmsTime = nullptr
 );
+#endif
 #endif // POSTPROCESS_H

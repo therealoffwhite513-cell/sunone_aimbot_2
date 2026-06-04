@@ -2,6 +2,622 @@
 #define _WINSOCKAPI_
 #include <winsock2.h>
 #include <Windows.h>
+
+#ifdef USE_CUDA
+
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/utils/logger.hpp>
+#include <cuda_runtime_api.h>
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstdio>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include "config.h"
+#include "other_tools.h"
+#include "provider_benchmark.h"
+#include "trt_detector.h"
+
+extern Config config;
+extern TrtDetector trt_detector;
+
+namespace benchmarks
+{
+namespace
+{
+using Clock = std::chrono::steady_clock;
+
+struct CliOptions
+{
+    bool help = false;
+    bool listDevices = false;
+    bool saveResults = true;
+    std::string providersRequested = "cuda";
+    std::string modelPath;
+    std::string cudaModelPath;
+    std::string imagePath;
+    std::string resultsPath = "benchmark_results/provider_benchmark_cuda.csv";
+    int runs = 100;
+    int warmupRuns = 10;
+    int resolution = 0;
+};
+
+struct BenchmarkResult
+{
+    std::string provider = "cuda";
+    std::string providerModel;
+    std::string status = "ok";
+    std::string error;
+    int inputW = 0;
+    int inputH = 0;
+    int runs = 0;
+    int warmupRuns = 0;
+    size_t lastDetections = 0;
+    double loadSeconds = 0.0;
+    double warmupSeconds = 0.0;
+    double totalSeconds = 0.0;
+    double preprocessSeconds = 0.0;
+    double inferenceSeconds = 0.0;
+    double postprocessSeconds = 0.0;
+};
+
+bool StartsWith(const std::string& value, const std::string& prefix)
+{
+    return value.rfind(prefix, 0) == 0;
+}
+
+bool ParseInt(const std::string& text, int* out)
+{
+    if (!out)
+        return false;
+    try
+    {
+        size_t used = 0;
+        int value = std::stoi(text, &used, 10);
+        if (used != text.size())
+            return false;
+        *out = value;
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+bool ConsumeValue(int argc, char** argv, int* index, const std::string& arg, const std::string& option, std::string* value)
+{
+    const std::string prefix = option + "=";
+    if (StartsWith(arg, prefix))
+    {
+        *value = arg.substr(prefix.size());
+        return true;
+    }
+
+    if (arg == option)
+    {
+        if (*index + 1 >= argc)
+            return false;
+        const std::string next = argv[*index + 1] ? argv[*index + 1] : "";
+        if (StartsWith(next, "--"))
+            return false;
+        *value = argv[++(*index)];
+        return true;
+    }
+
+    return false;
+}
+
+CliOptions ParseCli(int argc, char** argv)
+{
+    CliOptions options;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i] ? argv[i] : "";
+        std::string value;
+
+        if (arg == "--benchmark-help" || arg == "--bench-help")
+        {
+            options.help = true;
+            continue;
+        }
+        if (arg == "--bench-list-devices")
+        {
+            options.listDevices = true;
+            continue;
+        }
+        if (ConsumeValue(argc, argv, &i, arg, "--benchmark-providers", &value) ||
+            ConsumeValue(argc, argv, &i, arg, "--bench-providers", &value) ||
+            ConsumeValue(argc, argv, &i, arg, "--providers", &value))
+        {
+            options.providersRequested = value.empty() ? "cuda" : value;
+            continue;
+        }
+        if (ConsumeValue(argc, argv, &i, arg, "--bench-model", &value) ||
+            ConsumeValue(argc, argv, &i, arg, "--model", &value))
+        {
+            options.modelPath = value;
+            continue;
+        }
+        if (ConsumeValue(argc, argv, &i, arg, "--bench-cuda-model", &value) ||
+            ConsumeValue(argc, argv, &i, arg, "--cuda-model", &value))
+        {
+            options.cudaModelPath = value;
+            continue;
+        }
+        if (ConsumeValue(argc, argv, &i, arg, "--bench-image", &value) ||
+            ConsumeValue(argc, argv, &i, arg, "--image", &value))
+        {
+            options.imagePath = value;
+            continue;
+        }
+        if (ConsumeValue(argc, argv, &i, arg, "--bench-results", &value) ||
+            ConsumeValue(argc, argv, &i, arg, "--results", &value))
+        {
+            options.resultsPath = value;
+            continue;
+        }
+        if (ConsumeValue(argc, argv, &i, arg, "--bench-runs", &value) ||
+            ConsumeValue(argc, argv, &i, arg, "--runs", &value))
+        {
+            ParseInt(value, &options.runs);
+            continue;
+        }
+        if (ConsumeValue(argc, argv, &i, arg, "--bench-warmup", &value) ||
+            ConsumeValue(argc, argv, &i, arg, "--warmup", &value))
+        {
+            ParseInt(value, &options.warmupRuns);
+            continue;
+        }
+        if (ConsumeValue(argc, argv, &i, arg, "--bench-resolution", &value) ||
+            ConsumeValue(argc, argv, &i, arg, "--resolution", &value))
+        {
+            ParseInt(value, &options.resolution);
+            continue;
+        }
+        if (arg == "--bench-no-save")
+        {
+            options.saveResults = false;
+            continue;
+        }
+    }
+
+    options.runs = std::max(1, options.runs);
+    options.warmupRuns = std::max(0, options.warmupRuns);
+    return options;
+}
+
+void PrintHelp()
+{
+    std::cout
+        << "Usage:\n"
+        << "  ai.exe --benchmark-providers [cuda] [options]\n\n"
+        << "Options:\n"
+        << "  --bench-cuda-model <path>        TensorRT .engine or source .onnx model.\n"
+        << "  --bench-model <path>             Alias used when --bench-cuda-model is omitted.\n"
+        << "  --bench-image <path>             Optional image used as benchmark input.\n"
+        << "  --bench-results <path>           CSV append path. Default: benchmark_results/provider_benchmark_cuda.csv.\n"
+        << "  --bench-runs <n>                 Measured runs. Default: 100.\n"
+        << "  --bench-warmup <n>               Warmup runs before timing. Default: 10.\n"
+        << "  --bench-resolution <n>           Input size. Default: config detection_resolution.\n"
+        << "  --bench-no-save                  Do not append the summary row to CSV.\n"
+        << "  --bench-list-devices             Print CUDA devices and exit.\n"
+        << "  --benchmark-help                 Show this help.\n";
+}
+
+std::filesystem::path FindRepoRoot()
+{
+    std::error_code ec;
+    std::filesystem::path path = std::filesystem::current_path(ec);
+    if (ec)
+        return {};
+
+    while (!path.empty())
+    {
+        if (std::filesystem::exists(path / ".git"))
+            return path;
+        if (!path.has_parent_path() || path.parent_path() == path)
+            break;
+        path = path.parent_path();
+    }
+    return {};
+}
+
+std::string QuoteForCommand(const std::filesystem::path& path)
+{
+    std::string value = path.string();
+    std::string quoted = "\"";
+    for (char ch : value)
+        quoted += (ch == '"') ? "\\\"" : std::string(1, ch);
+    quoted += '"';
+    return quoted;
+}
+
+std::string CaptureCommandOutput(const std::string& command)
+{
+    std::array<char, 256> buffer{};
+    std::string output;
+    FILE* pipe = _popen(command.c_str(), "r");
+    if (!pipe)
+        return {};
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe))
+        output += buffer.data();
+    _pclose(pipe);
+
+    while (!output.empty() && (output.back() == '\n' || output.back() == '\r' || output.back() == ' ' || output.back() == '\t'))
+        output.pop_back();
+    return output;
+}
+
+std::string GetGitCommitId(const std::filesystem::path& repoRoot)
+{
+    if (repoRoot.empty())
+        return "unknown";
+    std::string commit = CaptureCommandOutput("git -C " + QuoteForCommand(repoRoot) + " rev-parse --short HEAD 2>NUL");
+    return commit.empty() ? "unknown" : commit;
+}
+
+bool GetGitDirty(const std::filesystem::path& repoRoot)
+{
+    if (repoRoot.empty())
+        return false;
+    return !CaptureCommandOutput("git -C " + QuoteForCommand(repoRoot) + " status --porcelain 2>NUL").empty();
+}
+
+std::string CurrentTimestampLocal()
+{
+    const std::time_t now = std::time(nullptr);
+    std::tm localTime{};
+    localtime_s(&localTime, &now);
+    std::ostringstream oss;
+    oss << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S");
+    return oss.str();
+}
+
+std::string CsvEscape(const std::string& value)
+{
+    std::string sanitized;
+    sanitized.reserve(value.size());
+    for (unsigned char ch : value)
+    {
+        if (ch == '\n' || ch == '\r' || ch == '\t')
+            sanitized += ' ';
+        else if (ch >= 32 && ch < 127)
+            sanitized += static_cast<char>(ch);
+    }
+
+    if (sanitized.find_first_of(",\"") == std::string::npos)
+        return sanitized;
+
+    std::string escaped = "\"";
+    for (char ch : sanitized)
+        escaped += (ch == '"') ? "\"\"" : std::string(1, ch);
+    escaped += '"';
+    return escaped;
+}
+
+std::filesystem::path ResolveBenchmarkModelPath(const CliOptions& options)
+{
+    if (!options.cudaModelPath.empty())
+        return options.cudaModelPath;
+    if (!options.modelPath.empty())
+        return options.modelPath;
+    if (!config.ai_model.empty())
+        return std::filesystem::path("models") / config.ai_model;
+
+    std::vector<std::string> models = getAvailableModels();
+    if (!models.empty())
+        return std::filesystem::path("models") / models.front();
+    return {};
+}
+
+cv::Mat LoadBenchmarkFrame(const CliOptions& options)
+{
+    if (!options.imagePath.empty())
+    {
+        cv::Mat image = cv::imread(options.imagePath, cv::IMREAD_COLOR);
+        if (!image.empty())
+        {
+            if (image.cols != options.resolution || image.rows != options.resolution)
+                cv::resize(image, image, cv::Size(options.resolution, options.resolution), 0, 0, cv::INTER_LINEAR);
+            return image;
+        }
+    }
+
+    cv::Mat frame(options.resolution, options.resolution, CV_8UC3);
+    for (int y = 0; y < frame.rows; ++y)
+    {
+        cv::Vec3b* row = frame.ptr<cv::Vec3b>(y);
+        for (int x = 0; x < frame.cols; ++x)
+        {
+            row[x] = cv::Vec3b(
+                static_cast<unsigned char>((x * 3 + y) % 256),
+                static_cast<unsigned char>((x + y * 5) % 256),
+                static_cast<unsigned char>((x * 7 + y * 11) % 256));
+        }
+    }
+    return frame;
+}
+
+void PrintCudaDevices()
+{
+    int count = 0;
+    cudaError_t status = cudaGetDeviceCount(&count);
+    if (status != cudaSuccess)
+    {
+        std::cout << "CUDA devices: unavailable (" << cudaGetErrorString(status) << ")\n";
+        return;
+    }
+
+    std::cout << "CUDA devices:\n";
+    for (int i = 0; i < count; ++i)
+    {
+        cudaDeviceProp prop{};
+        if (cudaGetDeviceProperties(&prop, i) == cudaSuccess)
+        {
+            std::cout << "  id=" << i
+                      << " name=" << prop.name
+                      << " capability=" << prop.major << "." << prop.minor
+                      << " memory_mb=" << (prop.totalGlobalMem / (1024 * 1024))
+                      << "\n";
+        }
+    }
+}
+
+BenchmarkResult RunCudaBenchmark(const CliOptions& options, const std::filesystem::path& modelPath, const cv::Mat& frame)
+{
+    BenchmarkResult result;
+    result.providerModel = modelPath.string();
+    result.inputW = frame.cols;
+    result.inputH = frame.rows;
+    result.runs = options.runs;
+    result.warmupRuns = options.warmupRuns;
+
+    auto loadStart = Clock::now();
+    try
+    {
+        trt_detector.initialize(modelPath.string());
+        result.loadSeconds = std::chrono::duration<double>(Clock::now() - loadStart).count();
+        if (!trt_detector.isInitialized())
+            throw std::runtime_error("TensorRT detector did not initialize.");
+
+        auto warmupStart = Clock::now();
+        for (int i = 0; i < options.warmupRuns; ++i)
+        {
+            auto detections = trt_detector.detect(frame);
+            result.lastDetections = detections.size();
+        }
+        result.warmupSeconds = std::chrono::duration<double>(Clock::now() - warmupStart).count();
+
+        auto totalStart = Clock::now();
+        for (int i = 0; i < options.runs; ++i)
+        {
+            auto detections = trt_detector.detect(frame);
+            result.lastDetections = detections.size();
+            result.preprocessSeconds += trt_detector.lastPreprocessTime.count() / 1000.0;
+            result.inferenceSeconds +=
+                (trt_detector.lastInferenceTime.count() + trt_detector.lastCopyTime.count()) / 1000.0;
+            result.postprocessSeconds += trt_detector.lastPostprocessTime.count() / 1000.0;
+        }
+        result.totalSeconds = std::chrono::duration<double>(Clock::now() - totalStart).count();
+    }
+    catch (const std::exception& e)
+    {
+        result.status = "failed";
+        result.error = e.what();
+        result.loadSeconds = std::chrono::duration<double>(Clock::now() - loadStart).count();
+    }
+
+    trt_detector.requestStop();
+    return result;
+}
+
+void PrintSummary(const CliOptions& options, const BenchmarkResult& result)
+{
+    std::cout << "\nCUDA benchmark summary (seconds)\n";
+    std::cout << "model=" << result.providerModel << "\n";
+    std::cout << "providers_requested=" << options.providersRequested << "\n";
+    std::cout << "resolution=" << options.resolution
+              << " runs=" << options.runs
+              << " warmup=" << options.warmupRuns
+              << "\n\n";
+
+    const double avgRun = (result.runs > 0 && result.totalSeconds > 0.0)
+        ? result.totalSeconds / static_cast<double>(result.runs)
+        : 0.0;
+    const double fps = (result.totalSeconds > 0.0)
+        ? static_cast<double>(result.runs) / result.totalSeconds
+        : 0.0;
+
+    std::cout << std::fixed << std::setprecision(6)
+        << "provider,provider_model,status,runs,warmup,input_w,input_h,"
+        << "load_s,warmup_s,total_s,preprocess_s,inference_s,postprocess_s,avg_run_s,fps,last_detections,error\n"
+        << result.provider << ","
+        << CsvEscape(result.providerModel) << ","
+        << result.status << ","
+        << result.runs << ","
+        << result.warmupRuns << ","
+        << result.inputW << ","
+        << result.inputH << ","
+        << result.loadSeconds << ","
+        << result.warmupSeconds << ","
+        << result.totalSeconds << ","
+        << result.preprocessSeconds << ","
+        << result.inferenceSeconds << ","
+        << result.postprocessSeconds << ","
+        << avgRun << ","
+        << fps << ","
+        << result.lastDetections << ","
+        << CsvEscape(result.error)
+        << "\n";
+}
+
+bool AppendBenchmarkCsv(const CliOptions& options, const BenchmarkResult& result, std::filesystem::path* writtenPath)
+{
+    std::filesystem::path csvPath = options.resultsPath.empty()
+        ? std::filesystem::path("benchmark_results/provider_benchmark_cuda.csv")
+        : std::filesystem::path(options.resultsPath);
+    const std::filesystem::path repoRoot = FindRepoRoot();
+    if (csvPath.is_relative() && !repoRoot.empty())
+        csvPath = repoRoot / csvPath;
+
+    std::error_code ec;
+    const std::filesystem::path parent = csvPath.parent_path();
+    if (!parent.empty())
+        std::filesystem::create_directories(parent, ec);
+    if (ec)
+        return false;
+
+    const std::string header =
+        "timestamp_local,commit_id,git_dirty,build_backend,providers_requested,provider,provider_model,status,"
+        "runs,warmup,input_w,input_h,load_s,warmup_s,total_s,preprocess_s,inference_s,postprocess_s,"
+        "avg_run_s,fps,last_detections,error";
+
+    bool writeHeader = true;
+    if (std::filesystem::exists(csvPath, ec) && !ec && std::filesystem::file_size(csvPath, ec) > 0)
+    {
+        std::ifstream existing(csvPath);
+        std::string firstLine;
+        std::getline(existing, firstLine);
+        if (!firstLine.empty() && firstLine.back() == '\r')
+            firstLine.pop_back();
+        writeHeader = firstLine != header;
+    }
+
+    std::ofstream file(csvPath, std::ios::app);
+    if (!file)
+        return false;
+
+    if (writeHeader)
+        file << header << "\n";
+
+    const double avgRun = (result.runs > 0 && result.totalSeconds > 0.0)
+        ? result.totalSeconds / static_cast<double>(result.runs)
+        : 0.0;
+    const double fps = (result.totalSeconds > 0.0)
+        ? static_cast<double>(result.runs) / result.totalSeconds
+        : 0.0;
+
+    file << std::fixed << std::setprecision(6)
+        << CsvEscape(CurrentTimestampLocal()) << ","
+        << CsvEscape(GetGitCommitId(repoRoot)) << ","
+        << (GetGitDirty(repoRoot) ? "true" : "false") << ","
+        << "cuda,"
+        << CsvEscape(options.providersRequested) << ","
+        << result.provider << ","
+        << CsvEscape(result.providerModel) << ","
+        << result.status << ","
+        << result.runs << ","
+        << result.warmupRuns << ","
+        << result.inputW << ","
+        << result.inputH << ","
+        << result.loadSeconds << ","
+        << result.warmupSeconds << ","
+        << result.totalSeconds << ","
+        << result.preprocessSeconds << ","
+        << result.inferenceSeconds << ","
+        << result.postprocessSeconds << ","
+        << avgRun << ","
+        << fps << ","
+        << result.lastDetections << ","
+        << CsvEscape(result.error)
+        << "\n";
+
+    if (writtenPath)
+        *writtenPath = csvPath;
+    return true;
+}
+} // namespace
+
+bool IsProviderBenchmarkRequested(int argc, char** argv)
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string arg = argv[i] ? argv[i] : "";
+        if (arg == "--benchmark-providers" ||
+            StartsWith(arg, "--benchmark-providers=") ||
+            arg == "--bench-providers" ||
+            StartsWith(arg, "--bench-providers=") ||
+            arg == "--benchmark-help" ||
+            arg == "--bench-help" ||
+            arg == "--bench-list-devices")
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+int RunProviderBenchmarkCli(int argc, char** argv)
+{
+    cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_FATAL);
+
+    CliOptions options = ParseCli(argc, argv);
+    if (options.help)
+    {
+        PrintHelp();
+        return 0;
+    }
+
+    if (options.listDevices)
+    {
+        PrintCudaDevices();
+        return 0;
+    }
+
+    if (!config.loadConfig())
+    {
+        std::cerr << "[Benchmark] Failed to load config.ini." << std::endl;
+        return 2;
+    }
+    config.backend = "TRT";
+
+    if (options.resolution <= 0)
+        options.resolution = config.detection_resolution > 0 ? config.detection_resolution : 320;
+    options.resolution = std::clamp(options.resolution, 32, 4096);
+
+    std::filesystem::path modelPath = ResolveBenchmarkModelPath(options);
+    if (modelPath.empty() || !std::filesystem::exists(modelPath))
+    {
+        std::cerr << "[Benchmark] TensorRT model was not found. Pass --bench-cuda-model <path> or put a model in models." << std::endl;
+        return 2;
+    }
+
+    cv::Mat frame = LoadBenchmarkFrame(options);
+    if (frame.empty())
+    {
+        std::cerr << "[Benchmark] Failed to prepare benchmark input frame." << std::endl;
+        return 2;
+    }
+
+    BenchmarkResult result = RunCudaBenchmark(options, modelPath, frame);
+    PrintSummary(options, result);
+    if (options.saveResults)
+    {
+        std::filesystem::path csvPath;
+        if (AppendBenchmarkCsv(options, result, &csvPath))
+        {
+            std::cout << "results_csv=" << csvPath.string() << "\n";
+            std::cout << "results_csv_base=repo_root\n";
+        }
+    }
+
+    return result.status == "ok" ? 0 : 3;
+}
+} // namespace benchmarks
+
+#else
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 
@@ -36,14 +652,8 @@
 #include "config.h"
 #include "postProcess.h"
 #include "provider_benchmark.h"
-#ifdef USE_CUDA
-#include "trt_detector.h"
-#endif
 
 extern Config config;
-#ifdef USE_CUDA
-extern TrtDetector trt_detector;
-#endif
 
 namespace benchmarks
 {
@@ -54,7 +664,6 @@ using Clock = std::chrono::steady_clock;
 enum class ProviderKind
 {
     Cpu,
-    Cuda,
     DmlGpu,
     DmlCpu
 };
@@ -70,7 +679,6 @@ struct CliOptions
     bool saveResults = true;
     std::vector<ProviderKind> providers;
     std::string modelPath;
-    std::string cudaModelPath;
     std::string imagePath;
     std::string resultsPath = "benchmark_results/provider_benchmark.csv";
     int runs = 100;
@@ -78,7 +686,6 @@ struct CliOptions
     int resolution = 0;
     int batch = 1;
     int dmlDeviceId = -1;
-    int cudaDeviceId = 0;
 };
 
 struct ModelInfo
@@ -195,7 +802,6 @@ std::string ProviderName(ProviderKind kind)
     switch (kind)
     {
     case ProviderKind::Cpu: return "cpu";
-    case ProviderKind::Cuda: return "cuda";
     case ProviderKind::DmlGpu: return "dml-gpu";
     case ProviderKind::DmlCpu: return "dml-cpu";
     }
@@ -207,8 +813,6 @@ std::optional<ProviderKind> ParseProviderName(const std::string& value)
     const std::string name = ToLower(value);
     if (name == "cpu")
         return ProviderKind::Cpu;
-    if (name == "cuda" || name == "ort-cuda" || name == "onnx-cuda")
-        return ProviderKind::Cuda;
     if (name == "dml" || name == "dml-gpu" || name == "dml_gpu" || name == "dml+gpu" || name == "directml")
         return ProviderKind::DmlGpu;
     if (name == "dml-cpu" || name == "dml_cpu" || name == "dml+cpu" || name == "warp" || name == "dml-warp")
@@ -336,12 +940,6 @@ CliOptions ParseCli(int argc, char** argv)
             options.modelPath = value;
             continue;
         }
-        if (ConsumeValue(argc, argv, &i, arg, "--bench-cuda-model", &value) ||
-            ConsumeValue(argc, argv, &i, arg, "--cuda-model", &value))
-        {
-            options.cudaModelPath = value;
-            continue;
-        }
         if (ConsumeValue(argc, argv, &i, arg, "--bench-image", &value) ||
             ConsumeValue(argc, argv, &i, arg, "--image", &value))
         {
@@ -384,12 +982,6 @@ CliOptions ParseCli(int argc, char** argv)
             ParseInt(value, &options.dmlDeviceId);
             continue;
         }
-        if (ConsumeValue(argc, argv, &i, arg, "--bench-cuda-device", &value) ||
-            ConsumeValue(argc, argv, &i, arg, "--cuda-device", &value))
-        {
-            ParseInt(value, &options.cudaDeviceId);
-            continue;
-        }
         if (arg == "--bench-no-postprocess")
         {
             options.postprocess = false;
@@ -411,7 +1003,6 @@ CliOptions ParseCli(int argc, char** argv)
     {
         options.providers = {
             ProviderKind::Cpu,
-            ProviderKind::Cuda,
             ProviderKind::DmlGpu,
             ProviderKind::DmlCpu
         };
@@ -579,10 +1170,9 @@ void PrintHelp()
 {
     std::cout
         << "Usage:\n"
-        << "  ai.exe --benchmark-providers [cpu,cuda,dml-gpu,dml-cpu] [options]\n\n"
+        << "  ai.exe --benchmark-providers [cpu,dml-gpu,dml-cpu] [options]\n\n"
         << "Options:\n"
         << "  --bench-model <path>             ONNX model path. Defaults to config ai_model if it is .onnx, otherwise first models/*.onnx.\n"
-        << "  --bench-cuda-model <path>        TensorRT .engine model for cuda provider. Defaults to same-stem .engine.\n"
         << "  --bench-image <path>             Image to preprocess for every run. Defaults to deterministic synthetic input.\n"
         << "  --bench-results <path>           CSV append path. Relative paths resolve from the repository root.\n"
         << "                                   Default: benchmark_results/provider_benchmark.csv.\n"
@@ -591,7 +1181,6 @@ void PrintHelp()
         << "  --bench-resolution <n>           Dynamic input size. Default: config detection_resolution.\n"
         << "  --bench-batch <n>                Requested batch size. Static-batch models keep their own batch.\n"
         << "  --bench-dml-device <id>          DXGI adapter id for dml-gpu. Default: config dml_device_id.\n"
-        << "  --bench-cuda-device <id>         CUDA device id for ORT CUDA EP. Default: 0.\n"
         << "  --bench-no-postprocess           Measure preprocess + session.Run only.\n"
         << "  --bench-disable-cpu-fallback     Disable ORT fallback to CPU EP for non-CPU providers.\n"
         << "  --bench-no-save                  Do not append the summary rows to CSV.\n"
@@ -1161,13 +1750,6 @@ void AppendProvider(Ort::SessionOptions& sessionOptions, ProviderKind kind, cons
     {
     case ProviderKind::Cpu:
         return;
-    case ProviderKind::Cuda:
-    {
-        OrtCUDAProviderOptions cudaOptions{};
-        cudaOptions.device_id = options.cudaDeviceId;
-        sessionOptions.AppendExecutionProvider_CUDA(cudaOptions);
-        return;
-    }
     case ProviderKind::DmlGpu:
     {
         const int deviceId = options.dmlDeviceId >= 0 ? options.dmlDeviceId : config.dml_device_id;
@@ -1274,8 +1856,6 @@ bool IsProviderAvailableForOrt(const std::vector<std::string>& availableProvider
     {
     case ProviderKind::Cpu:
         return true;
-    case ProviderKind::Cuda:
-        return HasOrtProvider(availableProviders, "CUDAExecutionProvider");
     case ProviderKind::DmlGpu:
     case ProviderKind::DmlCpu:
         return HasOrtProvider(availableProviders, "DmlExecutionProvider");
@@ -1425,136 +2005,6 @@ void RunOneIteration(
         *detections = detectionCount;
 }
 
-std::filesystem::path ResolveCudaModelPath(const CliOptions& options, const std::filesystem::path& modelPath)
-{
-    auto existingPath = [](const std::filesystem::path& path) -> std::filesystem::path
-    {
-        if (!path.empty() && std::filesystem::exists(path))
-            return path;
-        return {};
-    };
-
-    if (!options.cudaModelPath.empty())
-        return existingPath(options.cudaModelPath);
-
-    std::filesystem::path sameStem = modelPath;
-    sameStem.replace_extension(".engine");
-    if (auto path = existingPath(sameStem); !path.empty())
-        return path;
-
-    if (!config.ai_model.empty())
-    {
-        std::filesystem::path configured = std::filesystem::path("models") / config.ai_model;
-        if (ToLower(configured.extension().string()) == ".engine")
-        {
-            if (auto path = existingPath(configured); !path.empty())
-                return path;
-        }
-    }
-
-    return {};
-}
-
-ProviderResult RunCudaBenchmark(const CliOptions& options, const std::filesystem::path& modelPath, const cv::Mat& frame)
-{
-    ProviderResult result;
-    result.provider = ProviderName(ProviderKind::Cuda);
-    result.requestedBatch = options.batch;
-    result.effectiveBatch = 1;
-    result.inputW = options.resolution;
-    result.inputH = options.resolution;
-    result.runs = options.runs;
-    result.warmupRuns = options.warmupRuns;
-
-#ifndef USE_CUDA
-    result.status = "unavailable";
-    result.error = "CUDA provider requires a CUDA/TensorRT build.";
-    return result;
-#else
-    const std::filesystem::path cudaModelPath = ResolveCudaModelPath(options, modelPath);
-    if (cudaModelPath.empty())
-    {
-        result.status = "unavailable";
-        result.providerModel = options.cudaModelPath;
-        result.error = "TensorRT .engine model was not found. Pass --bench-cuda-model <path> or place same-stem .engine next to the ONNX model.";
-        return result;
-    }
-    result.providerModel = cudaModelPath.string();
-
-    struct ConfigGuard
-    {
-        std::string backend;
-        bool depthInferenceEnabled;
-        bool depthMaskEnabled;
-        bool circleFovEnabled;
-        bool fixedInputSize;
-
-        ConfigGuard()
-            : backend(config.backend),
-              depthInferenceEnabled(config.depth_inference_enabled),
-              depthMaskEnabled(config.depth_mask_enabled),
-              circleFovEnabled(config.circle_fov_enabled),
-              fixedInputSize(config.fixed_input_size)
-        {
-        }
-
-        ~ConfigGuard()
-        {
-            config.backend = backend;
-            config.depth_inference_enabled = depthInferenceEnabled;
-            config.depth_mask_enabled = depthMaskEnabled;
-            config.circle_fov_enabled = circleFovEnabled;
-            config.fixed_input_size = fixedInputSize;
-        }
-    } guard;
-
-    config.backend = "TRT";
-    config.depth_inference_enabled = false;
-    config.depth_mask_enabled = false;
-    config.circle_fov_enabled = false;
-
-    ScopedStreamSilencer silenceOut(std::cout);
-    ScopedStreamSilencer silenceErr(std::cerr);
-
-    auto loadStart = Clock::now();
-    try
-    {
-        trt_detector.initialize(cudaModelPath.string());
-        result.loadSeconds = std::chrono::duration<double>(Clock::now() - loadStart).count();
-        if (!trt_detector.isInitialized())
-            throw std::runtime_error("TensorRT detector did not initialize.");
-
-        auto warmupStart = Clock::now();
-        for (int i = 0; i < options.warmupRuns; ++i)
-        {
-            auto detections = trt_detector.detect(frame);
-            result.lastDetections = detections.size();
-        }
-        result.warmupSeconds = std::chrono::duration<double>(Clock::now() - warmupStart).count();
-
-        auto totalStart = Clock::now();
-        for (int i = 0; i < options.runs; ++i)
-        {
-            auto detections = trt_detector.detect(frame);
-            result.lastDetections = detections.size();
-            result.preprocessSeconds += trt_detector.lastPreprocessTime.count() / 1000.0;
-            result.inferenceSeconds +=
-                (trt_detector.lastInferenceTime.count() + trt_detector.lastCopyTime.count()) / 1000.0;
-            result.postprocessSeconds += trt_detector.lastPostprocessTime.count() / 1000.0;
-        }
-        result.totalSeconds = std::chrono::duration<double>(Clock::now() - totalStart).count();
-    }
-    catch (const std::exception& e)
-    {
-        result.status = "failed";
-        result.error = e.what();
-        result.loadSeconds = std::chrono::duration<double>(Clock::now() - loadStart).count();
-    }
-
-    return result;
-#endif
-}
-
 ProviderResult RunProviderBenchmark(
     Ort::Env& env,
     ProviderKind provider,
@@ -1569,9 +2019,6 @@ ProviderResult RunProviderBenchmark(
     result.requestedBatch = options.batch;
     result.runs = options.runs;
     result.warmupRuns = options.warmupRuns;
-
-    if (provider == ProviderKind::Cuda)
-        return RunCudaBenchmark(options, modelPath, frame);
 
     if ((provider == ProviderKind::DmlGpu || provider == ProviderKind::DmlCpu) &&
         !HasOrtProvider(availableProviders, "DmlExecutionProvider"))
@@ -1656,12 +2103,9 @@ void PrintSummary(
     const std::vector<std::string>& availableProviders,
     const std::vector<ProviderResult>& results)
 {
-    const std::filesystem::path cudaEnginePath = ResolveCudaModelPath(options, modelPath);
-
     std::cout << "\nProvider benchmark summary (seconds)\n";
     std::cout << "model_family=" << ModelFamilyName(modelPath) << "\n";
     std::cout << "onnx_model=" << modelPath.string() << "\n";
-    std::cout << "cuda_engine_model=" << (cudaEnginePath.empty() ? "(not found)" : cudaEnginePath.string()) << "\n";
     if (!modelSelection.empty())
         std::cout << "model_selection=" << modelSelection << "\n";
     std::cout << "providers_requested=";
@@ -1682,7 +2126,6 @@ void PrintSummary(
     const int dmlDeviceId = options.dmlDeviceId >= 0 ? options.dmlDeviceId : config.dml_device_id;
     std::cout << "dml_gpu_device_id=" << dmlDeviceId
               << " dml_gpu_device_name=" << AdapterName(dmlDeviceId)
-              << " cuda_device_id=" << options.cudaDeviceId
               << "\n\n";
 
     std::cout
@@ -1746,9 +2189,9 @@ std::string ModelFamilyName(const std::filesystem::path& modelPath)
 std::string BenchmarkCsvHeader()
 {
     return
-        "timestamp_local,commit_id,git_dirty,build_backend,model_family,onnx_model,cuda_engine_model,model_selection,providers_requested,"
+        "timestamp_local,commit_id,git_dirty,build_backend,model_family,onnx_model,model_selection,providers_requested,"
         "available_ort_providers,resolution,postprocess,disable_cpu_fallback,dml_gpu_device_id,"
-        "dml_gpu_device_name,cuda_device_id,provider,provider_model,status,runs,warmup,requested_batch,"
+        "dml_gpu_device_name,provider,provider_model,status,runs,warmup,requested_batch,"
         "effective_batch,input_w,input_h,load_s,warmup_s,total_s,preprocess_s,inference_s,"
         "postprocess_s,avg_run_s,avg_frame_s,fps,last_detections,error";
 }
@@ -1872,15 +2315,9 @@ bool AppendBenchmarkCsv(
     const std::string requestedProviders = ProvidersRequestedString(options.providers);
     const std::string availableProviderText = JoinStrings(availableProviders, "|");
     const std::string modelFamily = ModelFamilyName(modelPath);
-    const std::filesystem::path cudaEnginePath = ResolveCudaModelPath(options, modelPath);
     const int dmlDeviceId = options.dmlDeviceId >= 0 ? options.dmlDeviceId : config.dml_device_id;
     const std::string dmlDeviceName = AdapterName(dmlDeviceId);
-
-#ifdef USE_CUDA
-    const char* buildBackend = "cuda";
-#else
     const char* buildBackend = "dml";
-#endif
 
     file << std::fixed << std::setprecision(6);
     for (const ProviderResult& result : results)
@@ -1901,7 +2338,6 @@ bool AppendBenchmarkCsv(
             << buildBackend << ","
             << CsvEscape(modelFamily) << ","
             << CsvEscape(modelPath.string()) << ","
-            << CsvEscape(cudaEnginePath.string()) << ","
             << CsvEscape(modelSelection) << ","
             << CsvEscape(requestedProviders) << ","
             << CsvEscape(availableProviderText) << ","
@@ -1910,7 +2346,6 @@ bool AppendBenchmarkCsv(
             << (options.disableCpuFallback ? "true" : "false") << ","
             << dmlDeviceId << ","
             << CsvEscape(dmlDeviceName) << ","
-            << options.cudaDeviceId << ","
             << result.provider << ","
             << CsvEscape(result.providerModel) << ","
             << result.status << ","
@@ -2049,3 +2484,4 @@ int RunProviderBenchmarkCli(int argc, char** argv)
     return 0;
 }
 } // namespace benchmarks
+#endif

@@ -109,7 +109,9 @@ public:
 
     // AI
     std::string backend;
+#ifndef USE_CUDA
     int dml_device_id;
+#endif
     std::string ai_model;
     float confidence_threshold;
     float nms_threshold;

@@ -433,22 +433,11 @@ double MouseThread::currentDetectionDelaySec(double observationAgeSec) const
     }
     else
     {
-        std::string backend;
-        {
-            std::lock_guard<std::mutex> lock(configMutex);
-            backend = config.backend;
-        }
-
-        if (backend == "DML")
-        {
-            if (dml_detector)
-                detectionDelaySec = dml_detector->lastInferenceTimeDML.count() * 0.001;
-        }
 #ifdef USE_CUDA
-        else
-        {
-            detectionDelaySec = trt_detector.lastInferenceTime.count() * 0.001;
-        }
+        detectionDelaySec = trt_detector.lastInferenceTime.count() * 0.001;
+#else
+        if (dml_detector)
+            detectionDelaySec = dml_detector->lastInferenceTimeDML.count() * 0.001;
 #endif
     }
     if (!std::isfinite(detectionDelaySec))

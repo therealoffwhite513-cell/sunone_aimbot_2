@@ -632,8 +632,6 @@ void TrtDetector::processFrame(
     const cv::Mat& source_frame,
     std::chrono::steady_clock::time_point frameTimestamp)
 {
-    if (config.backend == "DML") return;
-
     if (detectionPaused)
     {
         detectionBuffer.clear();
@@ -656,8 +654,6 @@ void TrtDetector::processFrameGpu(
     const cv::cuda::GpuMat& frame,
     std::chrono::steady_clock::time_point frameTimestamp)
 {
-    if (config.backend == "DML") return;
-
     if (detectionPaused)
     {
         detectionBuffer.clear();

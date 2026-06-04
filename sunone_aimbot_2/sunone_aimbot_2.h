@@ -4,8 +4,9 @@
 #include "config.h"
 #ifdef USE_CUDA
 #include "trt_detector.h"
-#endif
+#else
 #include "dml_detector.h"
+#endif
 #include "mouse.h"
 #include "MouseInput.h"
 #include "Arduino.h"
@@ -21,8 +22,9 @@
 extern Config config;
 #ifdef USE_CUDA
 extern TrtDetector trt_detector;
-#endif
+#else
 extern DirectMLDetector* dml_detector;
+#endif
 extern DetectionBuffer detectionBuffer;
 extern MouseThread* globalMouseThread;
 extern GhubMouse* gHub;

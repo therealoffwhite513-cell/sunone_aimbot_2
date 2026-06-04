@@ -92,7 +92,6 @@ Use these fields:
 | `cpu_path_frames` | Frames captured through the CPU path. |
 | `trt_cpu_submitted` | Frames sent to TensorRT from CPU-prepared input. |
 | `trt_gpu_submitted` | Frames submitted to TensorRT from GPU path. |
-| `dml_submitted` | Frames sent to DirectML. |
 
 For example, this pattern means TensorRT is running, but capture/preprocess is going through CPU frames:
 
@@ -291,18 +290,18 @@ Then check `[CaptureDiag]` output.
 
 ### Provider Benchmark
 
-Use this when you want a repeatable ONNX Runtime provider comparison without starting capture, overlay, input devices, or file logging:
+Use this when you want repeatable provider timings without starting capture, overlay, input devices, or file logging:
 
 ```powershell
 .\ai.exe --benchmark-providers
 .\ai.exe --benchmark-providers cpu,dml-gpu --bench-runs 200 --bench-warmup 20
 .\ai.exe --benchmark-providers dml-gpu,dml-cpu --bench-model models\your_model.onnx
-.\ai.exe --benchmark-providers cuda --bench-model models\your_model.onnx --bench-cuda-model models\your_model.engine
+.\ai.exe --benchmark-providers cuda --bench-cuda-model models\your_model.engine
 ```
 
-The benchmark prints one final CSV-style summary in seconds. Providers are `cpu`, `cuda`, `dml-gpu`, and `dml-cpu`; `cuda` uses the TensorRT engine path in CUDA builds, and `dml-cpu` uses DirectML through the WARP software adapter. If no model is passed, the benchmark skips ONNX candidates that cannot initialize on the requested available providers.
+The benchmark prints one final CSV-style summary in seconds. DML builds support `cpu`, `dml-gpu`, and `dml-cpu`; CUDA builds support `cuda` through TensorRT.
 
-Each benchmark run appends rows to `benchmark_results\provider_benchmark.csv` under the repository root with the commit id, dirty flag, `model_family`, `onnx_model`, `cuda_engine_model`, `provider_model`, provider, and timing data. For `cuda`, `provider_model` is the `.engine` actually used by TensorRT. Use `--bench-no-save` for a disposable run.
+DML benchmark runs append rows to `benchmark_results\provider_benchmark.csv`; CUDA benchmark runs append rows to `benchmark_results\provider_benchmark_cuda.csv`. Use `--bench-no-save` for a disposable run.
 
 ### Razer Control Test
 

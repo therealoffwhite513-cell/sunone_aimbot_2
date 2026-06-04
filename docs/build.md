@@ -5,8 +5,8 @@ guide, but updates the actual build steps for the current wrapper-based build
 system.
 
 Use the provided batch wrappers for project builds. The wrappers set up the
-PowerShell scripts, Visual Studio environment, Ninja, NuGet packages, dependency
-paths, CMake generator, and build configuration.
+PowerShell scripts, Visual Studio environment, Ninja, backend-specific
+dependencies, CMake generator, and build configuration.
 
 ## 1. Choose a Backend
 
@@ -15,8 +15,8 @@ paths, CMake generator, and build configuration.
 | DML | You want the easiest Windows GPU path or non-NVIDIA support. | `.onnx` |
 | CUDA + TensorRT | You have a supported NVIDIA GPU and want the fastest backend. | `.engine`, or `.onnx` for first-time engine generation |
 
-The CUDA build still links ONNX Runtime/DirectML libraries because shared runtime
-paths and settings remain available in the project.
+The two builds are separated at compile time. CUDA builds do not compile or link
+DirectML/ONNX Runtime files, and DML builds do not compile CUDA/TensorRT files.
 
 ## 2. Requirements
 
@@ -129,10 +129,10 @@ The full build wrappers do the setup work that used to be handled manually:
 
 - Import the Visual Studio compiler environment through `VsDevCmd.bat`.
 - Find or cache Ninja.
-- Restore NuGet packages from `sunone_aimbot_2\packages.config`.
+- Restore NuGet packages for DML builds.
 - Download or prepare `SimpleIni.h` and the embedded `serial` module when missing.
 - Prepare DML OpenCV or build CUDA OpenCV.
-- Resolve CUDA, TensorRT, optional cuDNN, ONNX Runtime, and DirectML paths.
+- Resolve only the selected backend dependencies.
 - Write `build\dependency-resolution.json` for debugging.
 - Configure CMake with `Ninja Multi-Config`.
 - Build `ai.exe`.
@@ -153,7 +153,7 @@ project expects:
 | TensorRT | `sunone_aimbot_2\modules\TensorRT-*\` |
 | DML OpenCV | `sunone_aimbot_2\modules\opencv\build\dml\` |
 | CUDA OpenCV | `sunone_aimbot_2\modules\opencv\build\cuda\install\` |
-| NuGet packages | `packages\Microsoft.ML.OnnxRuntime.DirectML.*` and `packages\Microsoft.AI.DirectML.*` |
+| DML NuGet packages | `packages\Microsoft.ML.OnnxRuntime.DirectML.*` and `packages\Microsoft.AI.DirectML.*` |
 
 The Visual Studio project file is not the source of truth for dependency paths.
 Use the wrapper-generated CMake configuration.
@@ -173,11 +173,11 @@ runtime folders such as:
 ```text
 models
 depth_models
-screenshots
 ```
 
 Put detector models in the `models` folder beside `ai.exe`. Put depth models in
-the `depth_models` folder beside `ai.exe`.
+the `depth_models` folder beside `ai.exe`. The `screenshots` folder is created
+only when a screenshot is saved.
 
 When `AIMBOT_COPY_RUNTIME_DLLS` is enabled, CMake copies available runtime DLLs
 next to `ai.exe`, including:
@@ -185,9 +185,8 @@ next to `ai.exe`, including:
 - OpenCV runtime DLL.
 - `ghub_mouse.dll`, when present.
 - `rzctl.dll`, when present.
-- ONNX Runtime DLLs.
-- DirectML DLL for DML builds.
-- TensorRT, CUDA provider, and optional cuDNN DLLs for CUDA builds.
+- ONNX Runtime and DirectML DLLs for DML builds.
+- TensorRT and optional cuDNN DLLs for CUDA builds.
 
 ## 8. Advanced CMake Overrides
 
@@ -244,24 +243,21 @@ matching wrapper and run `ai.exe` from the output folder. Prefer a real DML or
 CUDA smoke test over static source-shape checks, because the architecture changes
 often.
 
-For repeatable ONNX Runtime provider timings, run the provider benchmark from
-the output folder:
+For repeatable provider timings, run the provider benchmark from the output
+folder:
 
 ```powershell
 .\ai.exe --benchmark-providers
 .\ai.exe --benchmark-providers cpu,dml-gpu --bench-runs 200 --bench-warmup 20
+.\ai.exe --benchmark-providers cuda --bench-cuda-model models\your_model.engine
 ```
 
 The benchmark prints a final CSV-style summary in seconds and does not write a
-log file. In CUDA builds, the `cuda` provider uses the existing TensorRT
-`.engine` path; pass `--bench-cuda-model` if the same-stem engine is not beside
-the selected ONNX model. Results are appended to
-`benchmark_results\provider_benchmark.csv` under the repository root by default,
-even when `ai.exe` is launched from `build\cuda\Release` or `build\dml\Release`.
-Use `--bench-no-save` for console-only runs or `--bench-results <path>` for a
-different CSV path. In the CSV, `onnx_model` is the model used by CPU/DML,
-`cuda_engine_model` is the matching TensorRT engine when present, and
-`provider_model` is the actual model used by that provider.
+log file. DML builds benchmark ONNX Runtime providers (`cpu`, `dml-gpu`,
+`dml-cpu`) and append to `benchmark_results\provider_benchmark.csv`. CUDA builds
+benchmark only TensorRT/CUDA and append to
+`benchmark_results\provider_benchmark_cuda.csv`. Use `--bench-no-save` for
+console-only runs or `--bench-results <path>` for a different CSV path.
 
 ## 11. Troubleshooting
 

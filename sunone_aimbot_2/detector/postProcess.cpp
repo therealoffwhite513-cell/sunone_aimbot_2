@@ -520,6 +520,7 @@ std::vector<Detection> postProcessYolo(
 }
 #endif
 
+#ifndef USE_CUDA
 std::vector<Detection> postProcessYoloDML(
     const float* output,
     const std::vector<int64_t>& shape,
@@ -540,3 +541,4 @@ std::vector<Detection> postProcessYoloDML(
         1.0f,
         nmsTime);
 }
+#endif
