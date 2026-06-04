@@ -2,6 +2,7 @@
 #include <numeric>
 #include <chrono>
 #include <limits>
+#include <cmath>
 
 #include "postProcess.h"
 #include "sunone_aimbot_2.h"
@@ -11,6 +12,379 @@
 
 namespace
 {
+void RunBoundedNms(
+    std::vector<Detection>& detections,
+    float nmsThreshold,
+    int maxDetections,
+    std::chrono::duration<double, std::milli>* nmsTime);
+
+bool TryPositiveInt64ToInt(int64_t value, int* out)
+{
+    if (!out || value <= 0 ||
+        value > static_cast<int64_t>(std::numeric_limits<int>::max()))
+    {
+        return false;
+    }
+
+    *out = static_cast<int>(value);
+    return true;
+}
+
+bool ExtractRowsCols(const std::vector<int64_t>& shape, int* rows, int* cols)
+{
+    if (shape.size() < 2)
+        return false;
+
+    return TryPositiveInt64ToInt(shape[shape.size() - 2], rows) &&
+        TryPositiveInt64ToInt(shape[shape.size() - 1], cols);
+}
+
+int ConfiguredClassCountHint()
+{
+    const int maxClassId = std::max(config.class_player, config.class_head);
+    if (maxClassId < 0 || maxClassId > 9999)
+        return 0;
+
+    return maxClassId + 1;
+}
+
+bool TryResolveClassLayout(
+    int extent,
+    int numClassesHint,
+    bool preferObjectness,
+    int* numClasses,
+    bool* usesObjectness)
+{
+    if (!numClasses || !usesObjectness || extent <= 4)
+        return false;
+
+    auto tryHint = [&](int hint) -> bool
+    {
+        if (hint <= 0 || hint > 10000)
+            return false;
+
+        if (extent == 5 + hint)
+        {
+            *numClasses = hint;
+            *usesObjectness = true;
+            return true;
+        }
+
+        if (extent == 4 + hint)
+        {
+            *numClasses = hint;
+            *usesObjectness = false;
+            return true;
+        }
+
+        return false;
+    };
+
+    if (tryHint(numClassesHint))
+        return true;
+
+    if (tryHint(ConfiguredClassCountHint()))
+        return true;
+
+    if (preferObjectness && extent > 5)
+    {
+        *numClasses = extent - 5;
+        *usesObjectness = true;
+        return *numClasses > 0;
+    }
+
+    *numClasses = extent - 4;
+    *usesObjectness = false;
+    return *numClasses > 0;
+}
+
+bool LooksLikeXyxyDetections(const float* output, int rows, int cols)
+{
+    if (!output || rows <= 0 || cols != 6)
+        return false;
+
+    const int maxSamples = std::min(rows, 256);
+    const int step = std::max(1, rows / maxSamples);
+    int considered = 0;
+    int validXyxy = 0;
+    int integerClassId = 0;
+
+    for (int i = 0; i < rows && considered < maxSamples; i += step)
+    {
+        const float* det = output + static_cast<size_t>(i) * static_cast<size_t>(cols);
+        const float x1 = det[0];
+        const float y1 = det[1];
+        const float x2 = det[2];
+        const float y2 = det[3];
+        const float confidence = det[4];
+        const float classId = det[5];
+
+        if (!std::isfinite(x1) || !std::isfinite(y1) ||
+            !std::isfinite(x2) || !std::isfinite(y2) ||
+            !std::isfinite(confidence) || !std::isfinite(classId))
+        {
+            continue;
+        }
+
+        ++considered;
+
+        if (x2 >= x1 && y2 >= y1)
+            ++validXyxy;
+
+        const float roundedClassId = std::round(classId);
+        if (classId >= -1.0f &&
+            classId <= 10000.0f &&
+            std::fabs(classId - roundedClassId) <= 1e-3f)
+        {
+            ++integerClassId;
+        }
+    }
+
+    if (considered == 0)
+        return false;
+
+    return validXyxy * 3 >= considered * 2 &&
+        integerClassId * 4 >= considered * 3;
+}
+
+void AddXyxyDetection(
+    std::vector<Detection>& detections,
+    float x1,
+    float y1,
+    float x2,
+    float y2,
+    float confidence,
+    int classId,
+    float scale,
+    float confThreshold)
+{
+    if (confidence <= confThreshold || x2 <= x1 || y2 <= y1)
+        return;
+
+    cv::Rect box;
+    box.x = static_cast<int>(x1 * scale);
+    box.y = static_cast<int>(y1 * scale);
+    box.width = static_cast<int>((x2 - x1) * scale);
+    box.height = static_cast<int>((y2 - y1) * scale);
+
+    if (box.width <= 0 || box.height <= 0)
+        return;
+
+    detections.push_back(Detection{ box, confidence, classId });
+}
+
+void AddCxcywhDetection(
+    std::vector<Detection>& detections,
+    float cx,
+    float cy,
+    float width,
+    float height,
+    float confidence,
+    int classId,
+    float scale,
+    float confThreshold)
+{
+    if (confidence <= confThreshold || width <= 0.0f || height <= 0.0f)
+        return;
+
+    const float halfWidth = 0.5f * width;
+    const float halfHeight = 0.5f * height;
+
+    cv::Rect box;
+    box.x = static_cast<int>((cx - halfWidth) * scale);
+    box.y = static_cast<int>((cy - halfHeight) * scale);
+    box.width = static_cast<int>(width * scale);
+    box.height = static_cast<int>(height * scale);
+
+    if (box.width <= 0 || box.height <= 0)
+        return;
+
+    detections.push_back(Detection{ box, confidence, classId });
+}
+
+void DecodeXyxyDetections(
+    const float* output,
+    int rows,
+    int cols,
+    float confThreshold,
+    float scale,
+    std::vector<Detection>& detections)
+{
+    detections.reserve(detections.size() + static_cast<size_t>(rows));
+
+    for (int i = 0; i < rows; ++i)
+    {
+        const float* det = output + static_cast<size_t>(i) * static_cast<size_t>(cols);
+        AddXyxyDetection(
+            detections,
+            det[0],
+            det[1],
+            det[2],
+            det[3],
+            det[4],
+            static_cast<int>(std::round(det[5])),
+            scale,
+            confThreshold);
+    }
+}
+
+void DecodeFeatureMajorPredictions(
+    const float* output,
+    int rows,
+    int cols,
+    int numClasses,
+    bool usesObjectness,
+    float confThreshold,
+    float scale,
+    std::vector<Detection>& detections)
+{
+    const int classBase = usesObjectness ? 5 : 4;
+    if (!output || rows < classBase + numClasses || cols <= 0 || numClasses <= 0)
+        return;
+
+    detections.reserve(detections.size() + 256);
+
+    for (int i = 0; i < cols; ++i)
+    {
+        const float cx = output[0 * cols + i];
+        const float cy = output[1 * cols + i];
+        const float ow = output[2 * cols + i];
+        const float oh = output[3 * cols + i];
+        const float objectness = usesObjectness ? output[4 * cols + i] : 1.0f;
+
+        float maxClassScore = 0.0f;
+        int maxClassId = 0;
+        for (int c = 0; c < numClasses; ++c)
+        {
+            const float score = output[(classBase + c) * cols + i];
+            if (score > maxClassScore)
+            {
+                maxClassScore = score;
+                maxClassId = c;
+            }
+        }
+
+        AddCxcywhDetection(
+            detections,
+            cx,
+            cy,
+            ow,
+            oh,
+            objectness * maxClassScore,
+            maxClassId,
+            scale,
+            confThreshold);
+    }
+}
+
+void DecodePredictionMajorPredictions(
+    const float* output,
+    int rows,
+    int cols,
+    int numClasses,
+    bool usesObjectness,
+    float confThreshold,
+    float scale,
+    std::vector<Detection>& detections)
+{
+    const int classBase = usesObjectness ? 5 : 4;
+    if (!output || cols < classBase + numClasses || rows <= 0 || numClasses <= 0)
+        return;
+
+    detections.reserve(detections.size() + 256);
+
+    for (int i = 0; i < rows; ++i)
+    {
+        const float* det = output + static_cast<size_t>(i) * static_cast<size_t>(cols);
+        const float objectness = usesObjectness ? det[4] : 1.0f;
+
+        float maxClassScore = 0.0f;
+        int maxClassId = 0;
+        for (int c = 0; c < numClasses; ++c)
+        {
+            const float score = det[classBase + c];
+            if (score > maxClassScore)
+            {
+                maxClassScore = score;
+                maxClassId = c;
+            }
+        }
+
+        AddCxcywhDetection(
+            detections,
+            det[0],
+            det[1],
+            det[2],
+            det[3],
+            objectness * maxClassScore,
+            maxClassId,
+            scale,
+            confThreshold);
+    }
+}
+
+std::vector<Detection> DecodeYoloOutput(
+    const float* output,
+    const std::vector<int64_t>& shape,
+    int numClassesHint,
+    float confThreshold,
+    float nmsThreshold,
+    int maxDetections,
+    float scale,
+    std::chrono::duration<double, std::milli>* nmsTime)
+{
+    std::vector<Detection> detections;
+    if (!output)
+        return detections;
+
+    int rows = 0;
+    int cols = 0;
+    if (!ExtractRowsCols(shape, &rows, &cols))
+        return detections;
+
+    if (cols == 6 && LooksLikeXyxyDetections(output, rows, cols))
+    {
+        DecodeXyxyDetections(output, rows, cols, confThreshold, scale, detections);
+    }
+    else if (rows <= cols)
+    {
+        int classes = 0;
+        bool usesObjectness = false;
+        if (TryResolveClassLayout(rows, numClassesHint, false, &classes, &usesObjectness))
+        {
+            DecodeFeatureMajorPredictions(
+                output,
+                rows,
+                cols,
+                classes,
+                usesObjectness,
+                confThreshold,
+                scale,
+                detections);
+        }
+    }
+    else
+    {
+        int classes = 0;
+        bool usesObjectness = false;
+        if (TryResolveClassLayout(cols, numClassesHint, true, &classes, &usesObjectness))
+        {
+            DecodePredictionMajorPredictions(
+                output,
+                rows,
+                cols,
+                classes,
+                usesObjectness,
+                confThreshold,
+                scale,
+                detections);
+        }
+    }
+
+    RunBoundedNms(detections, nmsThreshold, maxDetections, nmsTime);
+    return detections;
+}
+
 void SortDetectionsByConfidence(std::vector<Detection>& detections)
 {
     std::sort(
@@ -134,87 +508,15 @@ std::vector<Detection> postProcessYolo(
     std::chrono::duration<double, std::milli>* nmsTime
 )
 {
-    std::vector<Detection> detections;
-    detections.reserve(256);
-
-    if (shape.size() < 3) return detections;
-
-    int64_t rows = shape[1];
-    int64_t cols = shape[2];
-    const float img_scale = trt_detector.img_scale;
-
-    if (cols == 6)
-    {
-        int64_t numDetections = rows;
-        for (int i = 0; i < numDetections; ++i)
-        {
-            const float* det = output + i * cols;
-            float confidence = det[4];
-
-            if (confidence > confThreshold)
-            {
-                int classId = static_cast<int>(det[5]);
-
-                float cx = det[0];
-                float cy = det[1];
-                float dx = det[2];
-                float dy = det[3];
-
-                Detection detection;
-                detection.box.x = static_cast<int>(cx * img_scale);
-                detection.box.y = static_cast<int>(cy * img_scale);
-                detection.box.width = static_cast<int>((dx - cx) * img_scale);
-                detection.box.height = static_cast<int>((dy - cy) * img_scale);
-                detection.confidence = confidence;
-                detection.classId = classId;
-
-                detections.push_back(detection);
-            }
-        }
-    }
-    else
-    {
-        for (int i = 0; i < cols; ++i)
-        {
-            const float* col_data = output + i;
-
-            float cx = col_data[0 * cols];
-            float cy = col_data[1 * cols];
-            float ow = col_data[2 * cols];
-            float oh = col_data[3 * cols];
-
-            float maxScore = 0.0f;
-            int maxClassId = 0;
-            for (int c = 0; c < numClasses; ++c)
-            {
-                float score = col_data[(4 + c) * cols];
-                if (score > maxScore)
-                {
-                    maxScore = score;
-                    maxClassId = c;
-                }
-            }
-
-            if (maxScore > confThreshold)
-            {
-                const float half_ow = 0.5f * ow;
-                const float half_oh = 0.5f * oh;
-
-                Detection det;
-                det.box.x = static_cast<int>((cx - half_ow) * img_scale);
-                det.box.y = static_cast<int>((cy - half_oh) * img_scale);
-                det.box.width = static_cast<int>(ow * img_scale);
-                det.box.height = static_cast<int>(oh * img_scale);
-                det.confidence = maxScore;
-                det.classId = maxClassId;
-
-                detections.push_back(det);
-            }
-        }
-    }
-
-    RunBoundedNms(detections, nmsThreshold, maxDetections, nmsTime);
-    return detections;
+    return DecodeYoloOutput(
+        output,
+        shape,
+        numClasses,
+        confThreshold,
+        nmsThreshold,
+        maxDetections,
+        trt_detector.img_scale,
+        nmsTime);
 }
 #endif
 
@@ -228,81 +530,13 @@ std::vector<Detection> postProcessYoloDML(
     std::chrono::duration<double, std::milli>* nmsTime
 )
 {
-    std::vector<Detection> detections;
-    if (shape.size() != 2) return detections;
-
-    int64_t rows = shape[0];
-    int64_t cols = shape[1];
-    if (rows <= 0 || cols <= 0) return detections;
-    if (rows > std::numeric_limits<int>::max() || cols > std::numeric_limits<int>::max()) return detections;
-    const int rows_i = static_cast<int>(rows);
-    const int cols_i = static_cast<int>(cols);
-
-    if (cols_i == 6)
-    {
-        const int numDetections = rows_i;
-        detections.reserve(static_cast<size_t>(numDetections));
-        for (int i = 0; i < numDetections; ++i)
-        {
-            const float* det = output + i * cols_i;
-            float confidence = det[4];
-            if (confidence > confThreshold)
-            {
-                int classId = static_cast<int>(det[5]);
-                float cx = det[0];
-                float cy = det[1];
-                float dx = det[2];
-                float dy = det[3];
-
-                cv::Rect box;
-                box.x = static_cast<int>(cx);
-                box.y = static_cast<int>(cy);
-                box.width = static_cast<int>(dx - cx);
-                box.height = static_cast<int>(dy - cy);
-                detections.push_back(Detection{ box, confidence, classId });
-            }
-        }
-        RunBoundedNms(detections, nmsThreshold, maxDetections, nmsTime);
-        return detections;
-    }
-
-    if (numClasses <= 0 || rows_i < 4 + numClasses)
-        return detections;
-
-    detections.reserve(256);
-    for (int i = 0; i < cols_i; ++i)
-    {
-        float maxScore = output[4 * cols_i + i];
-        int maxClassId = 0;
-        for (int c = 1; c < numClasses; ++c)
-        {
-            const float score = output[(4 + c) * cols_i + i];
-            if (score > maxScore)
-            {
-                maxScore = score;
-                maxClassId = c;
-            }
-        }
-
-        if (maxScore > confThreshold)
-        {
-            float cx = output[i];
-            float cy = output[cols_i + i];
-            float ow = output[2 * cols_i + i];
-            float oh = output[3 * cols_i + i];
-            const float half_ow = 0.5f * ow;
-            const float half_oh = 0.5f * oh;
-            cv::Rect box;
-            box.x = static_cast<int>(cx - half_ow);
-            box.y = static_cast<int>(cy - half_oh);
-            box.width = static_cast<int>(ow);
-            box.height = static_cast<int>(oh);
-            detections.push_back(Detection{ box, maxScore, maxClassId });
-        }
-    }
-    if (!detections.empty())
-    {
-        RunBoundedNms(detections, nmsThreshold, maxDetections, nmsTime);
-    }
-    return detections;
+    return DecodeYoloOutput(
+        output,
+        shape,
+        numClasses,
+        confThreshold,
+        nmsThreshold,
+        maxDetections,
+        1.0f,
+        nmsTime);
 }

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <dxgi.h>
+#include <utility>
 
 #include "dml_detector.h"
 #include "sunone_aimbot_2.h"
@@ -324,20 +325,11 @@ DirectMLDetector::DirectMLDetector(const std::string& model_path)
     env(getDmlOrtLogLevel(), "DML_Detector"),
     memory_info(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault))
 {
-    session_options.SetLogId("DML_Detector");
-    session_options.SetLogSeverityLevel(static_cast<int>(getDmlOrtLogLevel()));
-    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
-    session_options.DisableMemPattern();
-    session_options.SetIntraOpNumThreads(1);
-    session_options.SetInterOpNumThreads(1);
-
-    Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_DML(session_options, config.dml_device_id));
-
-    if (config.verbose)
-        std::cout << "[DirectML] Using adapter: " << GetDMLDeviceName(config.dml_device_id) << std::endl;
-
-    initializeModel(model_path);
+    if (!initializeModel(model_path))
+    {
+        std::cerr << "[DML] Detector started without an active model. "
+                  << "Select another ONNX model or fix the model/provider compatibility." << std::endl;
+    }
 }
 
 DirectMLDetector::~DirectMLDetector()
@@ -346,71 +338,204 @@ DirectMLDetector::~DirectMLDetector()
     inferenceCV.notify_all();
 }
 
-void DirectMLDetector::initializeModel(const std::string& model_path)
+bool DirectMLDetector::isReady() const
+{
+    return model_ready.load();
+}
+
+Ort::SessionOptions DirectMLDetector::createSessionOptions(
+    bool useDirectML,
+    GraphOptimizationLevel graphOptimizationLevel)
+{
+    Ort::SessionOptions options;
+    options.SetLogId("DML_Detector");
+    options.SetLogSeverityLevel(static_cast<int>(getDmlOrtLogLevel()));
+    options.SetGraphOptimizationLevel(graphOptimizationLevel);
+    options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+    options.DisableMemPattern();
+    options.SetIntraOpNumThreads(1);
+    options.SetInterOpNumThreads(1);
+
+    if (useDirectML)
+    {
+        Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_DML(options, config.dml_device_id));
+    }
+
+    return options;
+}
+
+bool DirectMLDetector::tryInitializeModel(
+    const std::string& model_path,
+    bool useDirectML,
+    GraphOptimizationLevel graphOptimizationLevel,
+    const char* providerLabel,
+    std::string* error)
+{
+    try
+    {
+        Ort::SessionOptions options = createSessionOptions(useDirectML, graphOptimizationLevel);
+        std::wstring model_path_wide(model_path.begin(), model_path.end());
+        Ort::Session newSession(env, model_path_wide.c_str(), options);
+
+        std::string newInputName = newSession.GetInputNameAllocated(0, allocator).get();
+
+        std::vector<std::string> newOutputNames;
+        const size_t outputCount = newSession.GetOutputCount();
+        newOutputNames.reserve(outputCount);
+        for (size_t i = 0; i < outputCount; ++i)
+        {
+            newOutputNames.emplace_back(newSession.GetOutputNameAllocated(i, allocator).get());
+        }
+
+        const int newHeatOutputIndex = findOutputIndex(newOutputNames, "heat");
+        const int newBoxOutputIndex = findOutputIndex(newOutputNames, "box");
+        const int newOffsetOutputIndex = findOutputIndex(newOutputNames, "offset");
+        const bool newSunpointRawOutput =
+            newHeatOutputIndex >= 0 &&
+            newBoxOutputIndex >= 0 &&
+            newOffsetOutputIndex >= 0;
+
+        Ort::TypeInfo input_type_info = newSession.GetInputTypeInfo(0);
+        auto input_tensor_info = input_type_info.GetTensorTypeAndShapeInfo();
+        std::vector<int64_t> newInputShape = input_tensor_info.GetShape();
+
+        int newModelInputH = -1;
+        int newModelInputW = -1;
+        if (newInputShape.size() > 2)
+        {
+            int converted = 0;
+            if (tryInt64ToInt(newInputShape[2], &converted))
+                newModelInputH = converted;
+        }
+        if (newInputShape.size() > 3)
+        {
+            int converted = 0;
+            if (tryInt64ToInt(newInputShape[3], &converted))
+                newModelInputW = converted;
+        }
+
+        bool isStatic = true;
+        for (auto d : newInputShape) if (d <= 0) isStatic = false;
+
+        session = std::move(newSession);
+        input_name = std::move(newInputName);
+        output_names = std::move(newOutputNames);
+        output_name = output_names.empty() ? std::string() : output_names.front();
+        output_name_ptrs.clear();
+        output_name_ptrs.reserve(output_names.size());
+        for (const auto& name : output_names)
+            output_name_ptrs.push_back(name.c_str());
+
+        input_shape = std::move(newInputShape);
+        model_input_h = newModelInputH;
+        model_input_w = newModelInputW;
+        heat_output_index = newHeatOutputIndex;
+        box_output_index = newBoxOutputIndex;
+        offset_output_index = newOffsetOutputIndex;
+        sunpoint_raw_output = newSunpointRawOutput;
+        using_directml_provider = useDirectML;
+        model_ready.store(true);
+
+        if (isStatic != config.fixed_input_size)
+        {
+            config.fixed_input_size = isStatic;
+            detector_model_changed.store(true);
+            std::cout << "[DML] Automatically set fixed_input_size = "
+                      << (isStatic ? "true" : "false") << std::endl;
+        }
+
+        std::cout << "[DML] Model initialized with " << providerLabel
+                  << " provider: " << model_path << std::endl;
+
+        if (useDirectML && config.verbose)
+            std::cout << "[DirectML] Using adapter: " << GetDMLDeviceName(config.dml_device_id) << std::endl;
+
+        if (config.verbose)
+        {
+            std::cout << "[DML] Outputs:";
+            for (const auto& name : output_names)
+                std::cout << " " << name;
+            std::cout << (sunpoint_raw_output ? " (SunPoint raw)" : "") << std::endl;
+        }
+
+        return true;
+    }
+    catch (const Ort::Exception& e)
+    {
+        if (error) *error = e.what();
+    }
+    catch (const std::exception& e)
+    {
+        if (error) *error = e.what();
+    }
+    catch (...)
+    {
+        if (error) *error = "unknown exception";
+    }
+
+    return false;
+}
+
+bool DirectMLDetector::initializeModel(const std::string& model_path)
 {
     env.UpdateEnvWithCustomLogLevel(getDmlOrtLogLevel());
-    session_options.SetLogSeverityLevel(static_cast<int>(getDmlOrtLogLevel()));
+    const bool hadReadySession = model_ready.load();
 
-    std::wstring model_path_wide(model_path.begin(), model_path.end());
-    session = Ort::Session(env, model_path_wide.c_str(), session_options);
-
-    input_name = session.GetInputNameAllocated(0, allocator).get();
-    output_names.clear();
-    const size_t outputCount = session.GetOutputCount();
-    output_names.reserve(outputCount);
-    for (size_t i = 0; i < outputCount; ++i)
+    std::string directMlError;
+    if (tryInitializeModel(
+        model_path,
+        true,
+        GraphOptimizationLevel::ORT_ENABLE_ALL,
+        "DirectML",
+        &directMlError))
     {
-        output_names.emplace_back(session.GetOutputNameAllocated(i, allocator).get());
-    }
-    output_name = output_names.empty() ? std::string() : output_names.front();
-    output_name_ptrs.clear();
-    output_name_ptrs.reserve(output_names.size());
-    for (const auto& name : output_names)
-        output_name_ptrs.push_back(name.c_str());
-
-    heat_output_index = findOutputIndex(output_names, "heat");
-    box_output_index = findOutputIndex(output_names, "box");
-    offset_output_index = findOutputIndex(output_names, "offset");
-    sunpoint_raw_output =
-        heat_output_index >= 0 &&
-        box_output_index >= 0 &&
-        offset_output_index >= 0;
-
-    Ort::TypeInfo input_type_info = session.GetInputTypeInfo(0);
-    auto input_tensor_info = input_type_info.GetTensorTypeAndShapeInfo();
-    input_shape = input_tensor_info.GetShape();
-    model_input_h = -1;
-    model_input_w = -1;
-    if (input_shape.size() > 2)
-    {
-        int converted = 0;
-        if (tryInt64ToInt(input_shape[2], &converted))
-            model_input_h = converted;
-    }
-    if (input_shape.size() > 3)
-    {
-        int converted = 0;
-        if (tryInt64ToInt(input_shape[3], &converted))
-            model_input_w = converted;
+        return true;
     }
 
-    bool isStatic = true;
-    for (auto d : input_shape) if (d <= 0) isStatic = false;
+    std::cerr << "[DML] DirectML initialization failed for " << model_path
+              << ": " << directMlError << std::endl;
 
-    if (isStatic != config.fixed_input_size)
+    std::string directMlCompatError;
+    std::cerr << "[DML] Retrying DirectML with compatibility graph optimizations." << std::endl;
+    if (tryInitializeModel(
+        model_path,
+        true,
+        GraphOptimizationLevel::ORT_ENABLE_BASIC,
+        "DirectML compatibility",
+        &directMlCompatError))
     {
-        config.fixed_input_size = isStatic;
-        detector_model_changed.store(true);
-        std::cout << "[DML] Automatically set fixed_input_size = " << (isStatic ? "true" : "false") << std::endl;
+        return true;
     }
 
-    if (config.verbose)
+    std::cerr << "[DML] DirectML compatibility initialization failed for " << model_path
+              << ": " << directMlCompatError << std::endl;
+
+    std::string cpuError;
+    std::cerr << "[DML] Falling back to ONNX Runtime CPU provider. Detection may be slower." << std::endl;
+    if (tryInitializeModel(
+        model_path,
+        false,
+        GraphOptimizationLevel::ORT_ENABLE_ALL,
+        "CPU",
+        &cpuError))
     {
-        std::cout << "[DML] Outputs:";
-        for (const auto& name : output_names)
-            std::cout << " " << name;
-        std::cout << (sunpoint_raw_output ? " (SunPoint raw)" : "") << std::endl;
+        return true;
     }
+
+    std::cerr << "[DML] CPU fallback initialization failed for " << model_path
+              << ": " << cpuError << std::endl;
+
+    if (hadReadySession)
+    {
+        std::cerr << "[DML] Keeping the previous working detector session." << std::endl;
+    }
+    else
+    {
+        model_ready.store(false);
+        using_directml_provider = false;
+    }
+
+    return false;
 }
 
 void DirectMLDetector::preprocessFrameToTensor(const cv::Mat& frame, float* dst, int target_w, int target_h)
@@ -507,6 +632,7 @@ std::vector<Detection> DirectMLDetector::detect(const cv::Mat& input_frame)
 std::vector<std::vector<Detection>> DirectMLDetector::detectBatch(const std::vector<cv::Mat>& frames)
 {
     std::vector<std::vector<Detection>> empty;
+    if (!isReady()) return empty;
     if (frames.empty()) return empty;
     const size_t batch_size = frames.size();
 
@@ -674,6 +800,9 @@ std::vector<std::vector<Detection>> DirectMLDetector::detectBatch(const std::vec
 
 int DirectMLDetector::getNumberOfClasses()
 {
+    if (!isReady())
+        return -1;
+
     if (sunpoint_raw_output)
         return 2;
 
@@ -725,12 +854,30 @@ void DirectMLDetector::dmlInferenceThread()
     {
         while (!shouldExit)
         {
+            if (config.backend != "DML")
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                continue;
+            }
+
             if (detector_model_changed.load())
             {
-                initializeModel("models/" + config.ai_model);
-                detection_resolution_changed.store(true);
+                const bool reloaded = initializeModel("models/" + config.ai_model);
+                if (reloaded)
+                {
+                    detection_resolution_changed.store(true);
+                    std::cout << "[DML] Detector reloaded: " << config.ai_model << std::endl;
+                }
                 detector_model_changed.store(false);
-                std::cout << "[DML] Detector reloaded: " << config.ai_model << std::endl;
+                if (!reloaded && !isReady())
+                    detectionBuffer.clear();
+            }
+
+            if (!isReady())
+            {
+                detectionBuffer.clear();
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
             }
 
             if (detectionPaused)

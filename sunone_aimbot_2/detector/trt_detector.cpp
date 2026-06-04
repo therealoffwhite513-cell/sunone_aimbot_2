@@ -485,15 +485,17 @@ void TrtDetector::initialize(const std::string& modelFile)
     {
         const std::string& mainOut = outputNames[0];
         nvinfer1::Dims outDims = context->getTensorShape(mainOut.c_str());
-        const int64_t outChannels = outDims.d[1];
+        const int64_t outChannels = (outDims.nbDims >= 2) ? outDims.d[outDims.nbDims - 2] : 0;
         const int64_t classes64 = (outChannels > 4) ? (outChannels - 4) : 1;
         int classes = 0;
         if (!tryGetDimInt(classes64, &classes) || classes <= 0)
         {
-            std::cerr << "[Detector] Invalid output dimensions for classes" << std::endl;
-            return;
+            numClasses = 0;
         }
-        numClasses = classes;
+        else
+        {
+            numClasses = classes;
+        }
     }
 
     int c = 0;
@@ -768,6 +770,12 @@ void TrtDetector::inferenceThread()
 {
     while (!shouldExit)
     {
+        if (config.backend != "TRT")
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            continue;
+        }
+
         if (detector_model_changed.load())
         {
             {
@@ -1166,7 +1174,7 @@ void TrtDetector::copyCpuTensorToDevice(const cv::Mat& bgrFloatFrame, int width,
 
 std::vector<Detection> TrtDetector::postProcess(const float* output, const std::string& outputName, std::chrono::duration<double, std::milli>* nmsTime)
 {
-    if (numClasses <= 0)
+    if (!output)
         return {};
 
     const auto shapeIt = outputShapes.find(outputName);

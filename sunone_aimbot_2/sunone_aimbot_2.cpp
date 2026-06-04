@@ -390,11 +390,33 @@ int main(int argc, char** argv)
 
         if (config.backend == "DML")
         {
-            dml_detector = new DirectMLDetector("models/" + config.ai_model);
-            std::cout << "[MAIN] DML detector initialized." << std::endl;
-            dml_detThread = StartThreadGuarded("DmlDetector", [] {
-                dml_detector->dmlInferenceThread();
-                });
+            DirectMLDetector* newDmlDetector = nullptr;
+            try
+            {
+                newDmlDetector = new DirectMLDetector("models/" + config.ai_model);
+                dml_detector = newDmlDetector;
+                std::cout << "[MAIN] DML detector created"
+                          << (dml_detector->isReady() ? "." : " without an active model.") << std::endl;
+                dml_detThread = StartThreadGuarded("DmlDetector", [] {
+                    dml_detector->dmlInferenceThread();
+                    });
+            }
+            catch (const std::exception& e)
+            {
+                if (dml_detector == newDmlDetector)
+                    dml_detector = nullptr;
+                delete newDmlDetector;
+                std::cerr << "[MAIN] DML detector is unavailable: " << e.what()
+                          << ". The application will continue without DML inference." << std::endl;
+            }
+            catch (...)
+            {
+                if (dml_detector == newDmlDetector)
+                    dml_detector = nullptr;
+                delete newDmlDetector;
+                std::cerr << "[MAIN] DML detector is unavailable: unknown exception. "
+                          << "The application will continue without DML inference." << std::endl;
+            }
         }
 #ifdef USE_CUDA
         else

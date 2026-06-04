@@ -3,8 +3,12 @@
 
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/opencv.hpp>
+#include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <chrono>
+#include <string>
+#include <vector>
 
 #include "postProcess.h"
 
@@ -24,6 +28,7 @@ public:
         std::chrono::steady_clock::time_point frameTimestamp = {});
 
     int getNumberOfClasses();
+    bool isReady() const;
 
     std::chrono::duration<double, std::milli> lastInferenceTimeDML;
     std::chrono::duration<double, std::milli> lastPreprocessTimeDML;
@@ -37,8 +42,9 @@ public:
 private:
     Ort::Env env;
     Ort::Session session{ nullptr };
-    Ort::SessionOptions session_options;
     Ort::AllocatorWithDefaultOptions allocator;
+    std::atomic<bool> model_ready = false;
+    bool using_directml_provider = false;
 
     std::string input_name;
     std::string output_name;
@@ -65,7 +71,16 @@ private:
     std::chrono::steady_clock::time_point currentFrameTimestamp{};
     bool frameReady = false;
 
-    void initializeModel(const std::string& model_path);
+    bool initializeModel(const std::string& model_path);
+    bool tryInitializeModel(
+        const std::string& model_path,
+        bool useDirectML,
+        GraphOptimizationLevel graphOptimizationLevel,
+        const char* providerLabel,
+        std::string* error);
+    Ort::SessionOptions createSessionOptions(
+        bool useDirectML,
+        GraphOptimizationLevel graphOptimizationLevel);
     void preprocessFrameToTensor(const cv::Mat& frame, float* dst, int target_w, int target_h);
     Ort::MemoryInfo memory_info;
 };
