@@ -21,6 +21,7 @@ param(
     [switch]$ConfigureOnly,
     [switch]$BuildOnly,
     [switch]$NoInstall,
+    [string]$BuildList = "",
     [ValidateRange(0, 256)]
     [int]$MaxCpuCount = 0,
     [switch]$CleanBuild,
@@ -354,6 +355,16 @@ try {
         $CudaArchBin = "8.6"
         Write-Warning "[opencv-cuda] CUDA_ARCH_BIN is not set; using default value '$CudaArchBin'. Use -CudaArchBin to override."
     }
+    if (-not [string]::IsNullOrWhiteSpace($BuildList)) {
+        $buildListModules = @($BuildList -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        $requiredBuildListModules = @("cudev", "core", "imgproc", "imgcodecs", "videoio", "highgui")
+        foreach ($module in $requiredBuildListModules) {
+            if ($buildListModules -notcontains $module) {
+                $buildListModules = @($module) + $buildListModules
+            }
+        }
+        $BuildList = ($buildListModules | Select-Object -Unique) -join ","
+    }
 
     $cudaVersion = [System.IO.Path]::GetFileName($CudaPath.TrimEnd("\", "/")) -replace "^[vV]", ""
 
@@ -429,6 +440,9 @@ try {
         "-DBUILD_EXAMPLES=OFF",
         "-DCUDA_ARCH_BIN=$CudaArchBin"
     )
+    if (-not [string]::IsNullOrWhiteSpace($BuildList)) {
+        $cmakeConfigureArgs += "-DBUILD_LIST=$BuildList"
+    }
     if (-not $isMultiConfigGenerator) {
         $cmakeConfigureArgs += "-DCMAKE_BUILD_TYPE=$Configuration"
     }

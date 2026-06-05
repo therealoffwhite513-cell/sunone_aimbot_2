@@ -19,6 +19,8 @@
 #include <cwchar>
 #include <memory>
 
+#include <opencv2/core/utils/logger.hpp>
+
 #include "capture.h"
 #include "mouse.h"
 #include "sunone_aimbot_2.h"

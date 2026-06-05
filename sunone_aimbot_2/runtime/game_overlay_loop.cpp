@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <iostream>
 #include <mutex>
 #include <optional>
 #include <string>

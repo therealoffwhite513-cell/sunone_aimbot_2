@@ -46,6 +46,9 @@ echo   -UseLatestPackages
 echo   -OpenBrowserForDownloads
 echo   -CudaArchBin 8.6
 echo   -CudaArchBin all
+echo   -OpenCvBuildList cudev,core,imgproc,imgcodecs,videoio,highgui,dnn,cudaarithm,cudaimgproc,cudawarping
+echo   -OpenCvMaxCpuCount 2
+echo   -OpenCvCleanBuild
 echo.
 echo Defaults:
 echo   BuildDir=build\cuda

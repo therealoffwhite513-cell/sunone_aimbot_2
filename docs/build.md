@@ -104,6 +104,18 @@ Useful CUDA options:
 7.5;8.0;8.6;8.7;8.8;8.9;9.0;10.0;10.3;11.0;12.0;12.1
 ```
 
+For a broad release build, keep the multi-architecture CUDA set but limit OpenCV
+to the modules used by the app and reduce OpenCV build parallelism:
+
+```powershell
+.\build_cuda.bat -CudaArchBin all -OpenCvAlreadyBuilt $false -DownloadOrUpdateNeeded $true -OpenCvBuildList cudev,core,imgproc,imgcodecs,videoio,highgui,dnn,cudaarithm,cudaimgproc,cudawarping -OpenCvMaxCpuCount 2 -OpenCvCleanBuild
+```
+
+This still produces a CUDA OpenCV build for the `all` architecture preset, but
+avoids compiling unused contrib CUDA modules such as `cudafilters`.
+Use `-OpenCvCleanBuild` when changing the OpenCV module list so the old OpenCV
+CMake cache cannot keep stale module state.
+
 ## 4. Fast Local Rebuild
 
 After a full wrapper build has configured the selected backend once, use:

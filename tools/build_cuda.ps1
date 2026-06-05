@@ -11,6 +11,10 @@ param(
     [switch]$OpenBrowserForDownloads,
     [switch]$SkipOpenCvBuild,
     [string]$CudaArchBin = "",
+    [string]$OpenCvBuildList = "",
+    [ValidateRange(0, 256)]
+    [int]$OpenCvMaxCpuCount = 0,
+    [switch]$OpenCvCleanBuild,
     [switch]$NonInteractive,
     [switch]$DryRun,
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -41,6 +45,17 @@ try {
     $resolution = Get-BestCompatibleCudaDependencySet
     if (-not [string]::IsNullOrWhiteSpace($CudaArchBin)) {
         $resolution.CudaArchBin = $CudaArchBin
+    }
+    $effectiveOpenCvBuildList = $OpenCvBuildList
+    if (-not [string]::IsNullOrWhiteSpace($effectiveOpenCvBuildList)) {
+        $opencvBuildModules = @($effectiveOpenCvBuildList -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        $requiredOpenCvModules = @("cudev", "core", "imgproc", "imgcodecs", "videoio", "highgui")
+        foreach ($module in $requiredOpenCvModules) {
+            if ($opencvBuildModules -notcontains $module) {
+                $opencvBuildModules = @($module) + $opencvBuildModules
+            }
+        }
+        $effectiveOpenCvBuildList = ($opencvBuildModules | Select-Object -Unique) -join ","
     }
 
     $downloadItems = @()
@@ -127,6 +142,15 @@ try {
             "-CudaArchBin", $resolution.CudaArchBin,
             "-DisableCuDNN"
         )
+        if (-not [string]::IsNullOrWhiteSpace($effectiveOpenCvBuildList)) {
+            $opencvArgs += @("-BuildList", $effectiveOpenCvBuildList)
+        }
+        if ($OpenCvMaxCpuCount -gt 0) {
+            $opencvArgs += @("-MaxCpuCount", $OpenCvMaxCpuCount.ToString())
+        }
+        if ($OpenCvCleanBuild) {
+            $opencvArgs += "-CleanBuild"
+        }
         if ($DryRun) { $opencvArgs += "-DryRun" }
         $psArgs = @(
             "-NoProfile", "-ExecutionPolicy", "Bypass",

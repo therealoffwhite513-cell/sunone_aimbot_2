@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <d3d11.h>
+#include <iostream>
 #include <string>
 #include <vector>
 

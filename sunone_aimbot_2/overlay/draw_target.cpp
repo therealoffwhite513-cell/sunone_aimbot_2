@@ -6,6 +6,8 @@
 #include "d3d11.h"
 #include "imgui/imgui.h"
 
+#include <iostream>
+
 #include "overlay.h"
 #include "overlay/config_dirty.h"
 #include "draw_settings.h"
