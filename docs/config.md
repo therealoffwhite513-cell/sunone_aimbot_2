@@ -144,6 +144,8 @@ WIN32, GHUB, RAZER, ARDUINO, RP2350, TEENSY41, TEENSY41_HID, KMBOX_NET, KMBOX_A,
 | `KMBOX_A` | kmbox A serial/HID style control. |
 | `MAKCU` | MAKCU serial control. |
 
+`WIN32` is the easiest first test, but it uses standard Windows synthetic mouse events. Some games ignore or block that input path. If detection boxes are visible but the game does not react to aim movement or auto-shoot, switch to a supported runtime or external input device such as G HUB, Razer, Arduino/RP2350/Teensy, KMBOX, or MAKCU, and confirm that method is connected.
+
 When a hardware method is selected, the app expects that method to work. Razer and Teensy are intentionally explicit and do not silently switch to Win32 or another fallback method.
 
 ## Wind Mouse

@@ -45,10 +45,13 @@ Precompiled `.exe` builds are provided for both CUDA (NVIDIA only) and DirectML 
 * **Works on:**
 
 	* NVIDIA GPUs **GTX 1660, RTX 2000/3000/4000/5000**
-	* **Requires:** CUDA 13.1, TensorRT-10.14.1.48
+	* **Requires:** latest NVIDIA graphics driver and CUDA 13.1
 	* Windows 10/11 (x64)
 * **Not supported:** GTX 10xx/Pascal and older (TensorRT limitation)
-* **Includes both CUDA+TensorRT and DML support (switchable in settings)**
+* **Includes CUDA+TensorRT runtime files in the precompiled build**
+* TensorRT-10.14.1.48 is only needed separately when building from source.
+
+Before using the CUDA build, update your NVIDIA graphics driver to the latest available version, then install [CUDA 13.1](https://developer.nvidia.com/cuda-13-1-0-download-archive). Do this before troubleshooting missing CUDA DLLs or launch-close issues.
 
 **Both versions are ready-to-use: just download, unpack, run `ai.exe`.**
 
@@ -57,7 +60,7 @@ Precompiled `.exe` builds are provided for both CUDA (NVIDIA only) and DirectML 
 ## How to Run (For Precompiled Builds)
 
 1. **Download and unpack your chosen version (see links above).**
-2. For CUDA build, install [CUDA 13.1](https://developer.nvidia.com/cuda-13-1-0-download-archive) if not already installed.
+2. For CUDA build, first update your NVIDIA graphics driver to the latest version, then install [CUDA 13.1](https://developer.nvidia.com/cuda-13-1-0-download-archive) if not already installed.
 3. For DML build, no extra software is needed.
 4. **Run `ai.exe`.**
    On first launch, the model will be exported (may take up to 5 minutes).
