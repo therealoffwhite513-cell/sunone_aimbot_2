@@ -143,6 +143,88 @@ float MultiTargetTracker::iou(const cv::Rect2f& a, const cv::Rect2f& b)
     return inter / ua;
 }
 
+namespace
+{
+std::vector<int> hungarianMinimize(const std::vector<std::vector<double>>& costs)
+{
+    const int n = static_cast<int>(costs.size());
+    if (n == 0)
+        return {};
+    const int m = static_cast<int>(costs[0].size());
+    if (m == 0)
+        return std::vector<int>(n, -1);
+
+    std::vector<double> u(n + 1, 0.0);
+    std::vector<double> v(m + 1, 0.0);
+    std::vector<int> p(m + 1, 0);
+    std::vector<int> way(m + 1, 0);
+
+    for (int i = 1; i <= n; ++i)
+    {
+        p[0] = i;
+        int j0 = 0;
+        std::vector<double> minv(m + 1, std::numeric_limits<double>::infinity());
+        std::vector<char> used(m + 1, 0);
+
+        do
+        {
+            used[j0] = 1;
+            const int i0 = p[j0];
+            double delta = std::numeric_limits<double>::infinity();
+            int j1 = 0;
+
+            for (int j = 1; j <= m; ++j)
+            {
+                if (used[j])
+                    continue;
+
+                const double cur = costs[i0 - 1][j - 1] - u[i0] - v[j];
+                if (cur < minv[j])
+                {
+                    minv[j] = cur;
+                    way[j] = j0;
+                }
+                if (minv[j] < delta)
+                {
+                    delta = minv[j];
+                    j1 = j;
+                }
+            }
+
+            for (int j = 0; j <= m; ++j)
+            {
+                if (used[j])
+                {
+                    u[p[j]] += delta;
+                    v[j] -= delta;
+                }
+                else
+                {
+                    minv[j] -= delta;
+                }
+            }
+
+            j0 = j1;
+        } while (p[j0] != 0);
+
+        do
+        {
+            const int j1 = way[j0];
+            p[j0] = p[j1];
+            j0 = j1;
+        } while (j0 != 0);
+    }
+
+    std::vector<int> assignment(n, -1);
+    for (int j = 1; j <= m; ++j)
+    {
+        if (p[j] > 0)
+            assignment[p[j] - 1] = j - 1;
+    }
+    return assignment;
+}
+}
+
 int MultiTargetTracker::findTrackIndexById(int id) const
 {
     for (size_t i = 0; i < tracks_.size(); ++i)
@@ -208,6 +290,8 @@ void MultiTargetTracker::reset()
     tracks_.clear();
     nextId_ = 1;
     lockedTrackId_ = -1;
+    frameDtMeanSec_ = 1.0 / 60.0;
+    lastTrackerFrameTime_ = {};
 }
 
 void MultiTargetTracker::update(
@@ -219,9 +303,25 @@ void MultiTargetTracker::update(
     bool keepCurrentLock,
     std::chrono::steady_clock::time_point observationTime)
 {
-    const auto now = (observationTime.time_since_epoch().count() != 0)
+    auto now = (observationTime.time_since_epoch().count() != 0)
         ? observationTime
         : std::chrono::steady_clock::now();
+    if (lastTrackerFrameTime_.time_since_epoch().count() != 0)
+    {
+        double frameDt = std::chrono::duration<double>(now - lastTrackerFrameTime_).count();
+        if (!std::isfinite(frameDt) || frameDt <= 0.0)
+        {
+            const double fallbackDt = std::clamp(frameDtMeanSec_, 1.0 / 500.0, 0.25);
+            now = lastTrackerFrameTime_ +
+                std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                    std::chrono::duration<double>(fallbackDt));
+            frameDt = fallbackDt;
+        }
+        frameDt = std::clamp(frameDt, 1.0 / 500.0, 0.25);
+        frameDtMeanSec_ = frameDtMeanSec_ * 0.88 + frameDt * 0.12;
+    }
+    lastTrackerFrameTime_ = now;
+
     int classPlayer = 0;
     int classHead = 1;
     float bodyOffset = 0.15f;
@@ -359,6 +459,8 @@ void MultiTargetTracker::update(
 
     std::vector<int> detAssigned(dets.size(), -1);
     std::vector<int> trackAssigned(tracks_.size(), -1);
+    constexpr double kUnassignedCost = 2.0;
+    constexpr double kInvalidCost = 1000000.0;
 
     auto computeMatchScore = [&](const TrackState& t, const DetectionCandidate& d, bool relaxedForLocked) -> double
         {
@@ -410,84 +512,49 @@ void MultiTargetTracker::update(
             const double overlap = iou(predBox, d.box);
             const double missPenalty = t.missed * 0.025;
             const double hitBonus = std::min(6, t.hits) * 0.01;
-            return (dist / maxDist) + (1.0 - overlap) * 0.30 + classPenalty + missPenalty - hitBonus;
+            const double lockedBonus = (t.id == lockedTrackId_) ? 0.10 : 0.0;
+            return (dist / maxDist) + (1.0 - overlap) * 0.30 + classPenalty + missPenalty - hitBonus - lockedBonus;
         };
 
-    auto tryAssignTrack = [&](int trackIndex, bool relaxedForLocked)
-        {
-            if (trackIndex < 0 || trackIndex >= static_cast<int>(tracks_.size()))
-                return;
-            if (trackAssigned[trackIndex] != -1)
-                return;
-
-            double bestScore = std::numeric_limits<double>::infinity();
-            int bestDet = -1;
-            const auto& track = tracks_[trackIndex];
-
-            for (size_t di = 0; di < dets.size(); ++di)
-            {
-                if (detAssigned[di] != -1)
-                    continue;
-
-                const double score = computeMatchScore(track, dets[di], relaxedForLocked);
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    bestDet = static_cast<int>(di);
-                }
-            }
-
-            if (bestDet >= 0)
-            {
-                trackAssigned[trackIndex] = bestDet;
-                detAssigned[bestDet] = trackIndex;
-            }
-        };
-
-    // Always try to keep the locked track on the same identity first.
-    if (lockedTrackId_ != -1)
+    if (!tracks_.empty() && !dets.empty())
     {
-        const int lockedIdx = findTrackIndexById(lockedTrackId_);
-        if (lockedIdx >= 0)
-            tryAssignTrack(lockedIdx, true);
-    }
-
-    while (true)
-    {
-        double bestScore = std::numeric_limits<double>::max();
-        int bestTi = -1;
-        int bestDi = -1;
+        const size_t matrixSize = std::max(tracks_.size(), dets.size());
+        std::vector<std::vector<double>> costs(
+            matrixSize,
+            std::vector<double>(matrixSize, kUnassignedCost));
 
         for (size_t ti = 0; ti < tracks_.size(); ++ti)
         {
-            if (trackAssigned[ti] != -1)
-                continue;
-
             const auto& t = tracks_[ti];
-
             for (size_t di = 0; di < dets.size(); ++di)
             {
-                if (detAssigned[di] != -1)
-                    continue;
-                const auto& d = dets[di];
-                const double score = computeMatchScore(t, d, false);
-                if (!std::isfinite(score))
-                    continue;
-
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    bestTi = static_cast<int>(ti);
-                    bestDi = static_cast<int>(di);
-                }
+                const bool relaxedForLocked = (t.id == lockedTrackId_);
+                const double score = computeMatchScore(t, dets[di], relaxedForLocked);
+                costs[ti][di] = std::isfinite(score) ? score : kInvalidCost;
             }
         }
 
-        if (bestTi < 0 || bestDi < 0)
-            break;
+        const auto assignment = hungarianMinimize(costs);
+        for (size_t ti = 0; ti < tracks_.size(); ++ti)
+        {
+            if (ti >= assignment.size())
+                continue;
 
-        trackAssigned[bestTi] = bestDi;
-        detAssigned[bestDi] = bestTi;
+            const int di = assignment[ti];
+            if (di < 0 || di >= static_cast<int>(dets.size()))
+                continue;
+
+            const double assignedCost = costs[ti][di];
+            if (!std::isfinite(assignedCost) ||
+                assignedCost >= kInvalidCost ||
+                assignedCost >= kUnassignedCost)
+            {
+                continue;
+            }
+
+            trackAssigned[ti] = di;
+            detAssigned[di] = static_cast<int>(ti);
+        }
     }
 
     for (size_t ti = 0; ti < tracks_.size(); ++ti)

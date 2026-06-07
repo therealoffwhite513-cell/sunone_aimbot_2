@@ -36,6 +36,19 @@ aim::AimKalmanSettings buildKalmanSettingsFromConfig()
     std::lock_guard<std::mutex> lock(configMutex);
     return buildKalmanSettingsFromConfigUnlocked();
 }
+
+double currentFrameIntervalSec()
+{
+    double fps = static_cast<double>(captureFps.load());
+    if (fps <= 0.0)
+    {
+        std::lock_guard<std::mutex> lock(configMutex);
+        fps = (config.capture_fps > 0) ? static_cast<double>(config.capture_fps) : 60.0;
+    }
+
+    fps = std::clamp(fps, 15.0, 500.0);
+    return 1.0 / fps;
+}
 }
 
 MouseThread::MouseThread(
@@ -487,14 +500,16 @@ std::pair<double, double> MouseThread::predict_target_position(
         targetKalman.reset();
         const double detectionDelaySec = currentDetectionDelaySec(observationAgeSec);
         const double lookaheadSec = currentPredictionLookaheadSec(detectionDelaySec);
-        lastKalmanTelemetry = targetKalman.update(target_x, target_y, 1.0 / 120.0, lookaheadSec);
+        lastKalmanTelemetry = targetKalman.update(target_x, target_y, currentFrameIntervalSec(), lookaheadSec);
         lastDetectionDelaySec = detectionDelaySec;
         lastPredictionLookaheadSec = lookaheadSec;
         return { target_x, target_y };
     }
 
     double dt = std::chrono::duration<double>(observationTime - prev_time).count();
-    if (dt < 1e-8) dt = 1e-8;
+    if (!std::isfinite(dt) || dt <= 0.0)
+        dt = currentFrameIntervalSec();
+    dt = std::clamp(dt, 1.0 / 500.0, 0.25);
 
     prev_time = observationTime;
     prev_x = target_x;
@@ -757,8 +772,7 @@ std::vector<std::pair<double, double>> MouseThread::predictFuturePositions(doubl
 
     result.reserve(frames);
 
-    const double fixedFps = 30.0;
-    const double frame_time = 1.0 / fixedFps;
+    const double frame_time = currentFrameIntervalSec();
 
     targetKalman.setSettings(buildKalmanSettingsFromConfig());
     if (targetKalman.initialized())

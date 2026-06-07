@@ -99,6 +99,8 @@ private:
     int nextId_ = 1;
     int lockedTrackId_ = -1;
     int maxMissedFrames_ = 6;
+    double frameDtMeanSec_ = 1.0 / 60.0;
+    std::chrono::steady_clock::time_point lastTrackerFrameTime_{};
 };
 
 #endif // AIMBOTTARGET_H

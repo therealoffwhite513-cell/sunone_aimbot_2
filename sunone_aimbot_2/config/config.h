@@ -32,6 +32,8 @@ public:
     float body_y_offset;
     float head_y_offset;
     bool auto_aim;
+    bool tracker_enabled;
+    bool tracker_overlay_table_enabled;
 
     // Mouse
     int fovX;
