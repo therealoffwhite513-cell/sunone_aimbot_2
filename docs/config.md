@@ -93,6 +93,8 @@ Use `circle_fov_enabled` for normal circular aim limiting and overlay visualizat
 | `body_y_offset` | `0.15` | Vertical target offset for body aim. |
 | `head_y_offset` | `0.05` | Vertical target offset for head aim. |
 | `auto_aim` | `false` | Enables automatic aim behavior when supported by current controls and buttons. |
+| `tracker_enabled` | `true` | Enables the simple persistent target tracker. When disabled, aiming falls back to nearest-target selection each detection frame. |
+| `tracker_overlay_table_enabled` | `true` | Shows the target-track information table in the Tracker overlay tab. |
 
 ## Mouse Movement and Tracking
 

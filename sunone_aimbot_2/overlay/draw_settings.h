@@ -4,6 +4,7 @@
 void draw_capture_settings();
 void draw_capture_preview();
 void draw_target();
+void draw_tracker();
 void draw_mouse();
 void draw_mouse_movement();
 void draw_mouse_prediction();

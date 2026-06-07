@@ -75,6 +75,8 @@ bool Config::loadConfig(const std::string& filename)
         body_y_offset = 0.15f;
         head_y_offset = 0.05f;
         auto_aim = false;
+        tracker_enabled = true;
+        tracker_overlay_table_enabled = true;
 
         // Mouse
         fovX = 106;
@@ -399,6 +401,8 @@ bool Config::loadConfig(const std::string& filename)
     body_y_offset = (float)get_double("body_y_offset", 0.15);
     head_y_offset = (float)get_double("head_y_offset", 0.05);
     auto_aim = get_bool("auto_aim", false);
+    tracker_enabled = get_bool("tracker_enabled", true);
+    tracker_overlay_table_enabled = get_bool("tracker_overlay_table_enabled", true);
 
     // Mouse
     fovX = get_long("fovX", 106);
@@ -683,7 +687,9 @@ bool Config::saveConfig(const std::string& filename)
         << std::fixed << std::setprecision(2)
         << "body_y_offset = " << body_y_offset << "\n"
         << "head_y_offset = " << head_y_offset << "\n"
-        << "auto_aim = " << (auto_aim ? "true" : "false") << "\n\n";
+        << "auto_aim = " << (auto_aim ? "true" : "false") << "\n"
+        << "tracker_enabled = " << (tracker_enabled ? "true" : "false") << "\n"
+        << "tracker_overlay_table_enabled = " << (tracker_overlay_table_enabled ? "true" : "false") << "\n\n";
 
     // Mouse
     file << "# Mouse move\n"

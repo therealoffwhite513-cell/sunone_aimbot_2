@@ -373,6 +373,7 @@ static const OverlayTabItem kOverlayTabs[] = {
     { "Depth",         "Vision",  "Depth inference, masks and depth debug overlay.",     draw_depth,                   SidebarIconKind::Layers },
 
     { "Target",        "Aim",     "Target selection and aim point offsets.",             draw_target,                  SidebarIconKind::Crosshair },
+    { "Tracker",       "Aim",     "Current target identity lock status.",                draw_tracker,                 SidebarIconKind::Crosshair },
     { "Movement",      "Aim",     "FOV, speed, target correction and motion profile.",   draw_mouse_movement,          SidebarIconKind::Move },
     { "Prediction",    "Aim",     "Prediction points and Kalman filter tuning.",         draw_mouse_prediction,        SidebarIconKind::Curve },
     { "Assist",        "Aim",     "Auto shoot, recoil compensation and assist toggles.", draw_mouse_assist,            SidebarIconKind::Spark },
